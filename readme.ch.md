@@ -121,7 +121,7 @@ Seraphine is not endorsed by Riot Games and does not reflect the views or opinio
 **参考译文**：Seraphine 未经 Riot Games 认可，也不代表 Riot Games 或任何官方参与制作或管理 Riot Games 产品的人的观点或意见。Riot Games 及其所有相关产物均为 Riot Games，Inc 的商标或注册商标。
 
 ## 套盾环节 🛡️
-本程序为在 GitHub 仓库 [Zzaphkiel/Seraphine](https://github.com/Zzaphkiel/Seraphine) 开源的代码，以及在 [Release](https://github.com/Zzaphkiel/Seraphine/releases) 或官方 QQ 群组中上传的二进制文件。本环节旨在让用户更加全面详尽地了解本程序以及可能风险，以便用户在使用本程序前及过程中做出充分的风险评估和明智的决策。
+本程序为在 GitHub 仓库 [Zzaphkiel/Seraphine](https://github.com/Zzaphkiel/Seraphine) 开源的代码，以及在 [Release](https://github.com/Zzaphkiel/Seraphine/releases) 中上传的二进制文件。本环节旨在让用户更加全面详尽地了解本程序以及可能风险，以便用户在使用本程序前及过程中做出充分的风险评估和明智的决策。
 
 1. 本程序的目的是通过为游戏玩家提供**游戏外**辅助功能，从而给玩家提供更好的游戏体验。我们不鼓励不支持任何违反 Riot 以及腾讯规定或任何可能导致游戏环境不公平的行为。
 2. 本程序的代码实现遵守 [Riot Policies](https://developer.riotgames.com/policies/general) 的规定，提供的功能符合 [《英雄联盟》游戏插件公约](https://lol.qq.com/webplat/info/news_version3/152/4579/4581/m3106/201509/381618.shtml) 的要求。
@@ -188,10 +188,6 @@ Seraphine is not endorsed by Riot Games and does not reflect the views or opinio
     PyCharm：适用于数据科学和 Web 开发的 Python IDE
   </p>
 
-
-## 交流群
-- Seraphine 交流群（QQ）：[926719775](https://qm.qq.com/cgi-bin/qm/qr?k=ulYfeMNL-GrYzemJyjOq7K1y4YSasBPL&jump_from=webapi&authKey=6Nw8v3gCSswJ6HtoMlqTs2+/nS5llSOgVIs/Hh2Xm0yzNZ0yEIDjvYQqbdjF4wbb)（已满，随缘进群），入群口令：enihpareS
-  
 
 ## 许可证 ⚖️
 - 对于非商用行为，Seraphine 使用 [GPLv3](https://github.com/Zzaphkiel/Seraphine/blob/main/LICENSE) 许可证。
