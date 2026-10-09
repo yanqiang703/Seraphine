@@ -1,0 +1,289 @@
+import sys
+
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import (QPushButton, QVBoxLayout, QWidget, QLabel, QFileDialog,
+                             QHBoxLayout)
+from PyQt5.QtGui import QFont, QPixmap
+
+from app.common.qfluentwidgets import (MessageBoxBase, SmoothScrollArea,
+                                       BodyLabel, TextEdit, TitleLabel,
+                                       PrimaryPushButton, ComboBox,
+                                       PipsScrollButtonDisplayMode, HorizontalPipsPager,
+                                       FlyoutViewBase, PushButton)
+
+from app.common.config import cfg
+from app.common.util import getLolClientPidSlowly
+from app.common.signals import signalBus
+from app.lol.connector import connector
+from app.components.multi_champion_select import MultiChampionSelectWidget
+from app.components.multi_lol_path_setting import PathDraggableWidget
+from app.components.champion_icon_widget import RoundedLabel
+
+
+class WaitingForLolMessageBox(MessageBoxBase):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+
+        self.myYesButton = PrimaryPushButton(
+            self.tr('Connect To Client'), self.buttonGroup)
+        self.myCancelButton = QPushButton(
+            self.tr('Exit Seraphine'), self.buttonGroup)
+
+        self.titleLabel = TitleLabel()
+        self.content = BodyLabel()
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initWidget(self):
+        self.yesButton.setVisible(False)
+        self.cancelButton.setVisible(False)
+
+        self.myCancelButton.setObjectName("cancelButton")
+        self.buttonLayout.addWidget(self.myYesButton)
+        self.buttonLayout.addWidget(self.myCancelButton)
+
+        self.titleLabel.setText(self.tr('Tasklist is not available'))
+        self.titleLabel.setContentsMargins(5, 0, 5, 0)
+
+        self.content.setText(
+            self.tr('Please clicked "Connect To Client" button manually when LOL launched completely'))
+        self.content.setContentsMargins(8, 0, 5, 0)
+
+        self.myYesButton.clicked.connect(self.__onYesButtonClicked)
+        self.myCancelButton.clicked.connect(self.__onCancelButtonClicked)
+
+    def __initLayout(self):
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.content)
+
+    def __onYesButtonClicked(self):
+        pid = getLolClientPidSlowly()
+
+        if pid == -1:
+            return
+
+        signalBus.lolClientStarted.emit(pid)
+        self.accept()
+        self.accepted.emit()
+
+    def __onCancelButtonClicked(self):
+        self.reject()
+        self.rejected.emit()
+
+
+class ChangeClientMessageBox(MessageBoxBase):
+    def __init__(self, pids, parent=None):
+        super().__init__(parent)
+
+        self.myYesButton = PrimaryPushButton(
+            self.tr('Reconnect'), self.buttonGroup)
+        self.myCancelButton = QPushButton(
+            self.tr('Cancel'), self.buttonGroup)
+
+        self.pids = pids
+
+        self.titleLabel = TitleLabel()
+        self.content = BodyLabel()
+
+        self.comboBox = ComboBox()
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initWidget(self):
+        self.yesButton.setVisible(False)
+        self.cancelButton.setVisible(False)
+        self.myYesButton.clicked.connect(self.__onYesButtonClicked)
+        self.myCancelButton.clicked.connect(self.__onCancelButtonClicked)
+
+        self.myCancelButton.setObjectName("cancelButton")
+        self.buttonLayout.addWidget(self.myYesButton)
+        self.buttonLayout.addWidget(self.myCancelButton)
+
+        self.titleLabel.setText(self.tr('Change client'))
+        self.titleLabel.setContentsMargins(5, 0, 5, 0)
+
+        self.content.setText(
+            self.tr('Please select the target LOL client:'))
+        self.content.setContentsMargins(8, 0, 5, 0)
+
+        for i, pid in enumerate(self.pids):
+            summoner = connector.getLoginSummonerByPid(pid)
+            item = (summoner.get("gameName") or summoner['displayName']) + \
+                self.tr(", ") + self.tr("PID: ") + str(pid)
+
+            if pid == connector.pid:
+                item += " " + self.tr("(current)")
+                currentIdx = i
+
+            self.comboBox.addItem(item)
+
+        self.comboBox.setCurrentIndex(currentIdx)
+        self.comboBox.setMinimumWidth(400)
+
+    def __initLayout(self):
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.content)
+        self.viewLayout.addWidget(self.comboBox)
+
+    def __onYesButtonClicked(self):
+        pid = self.pids[self.comboBox.currentIndex()]
+        if connector.pid != pid:
+            signalBus.lolClientChanged.emit(pid)
+
+        self.accept()
+        self.accepted.emit()
+
+    def __onCancelButtonClicked(self):
+        self.reject()
+        self.rejected.emit()
+
+
+class ExceptionMessageBox(MessageBoxBase):
+    def __init__(self, title, content, parent):
+        super().__init__(parent=parent)
+
+        self.titleLabel = TitleLabel(title)
+        self.textEdit = TextEdit()
+        self.textEdit.setText(content)
+
+        self.scrollArea = SmoothScrollArea()
+        self.scrollWidget = QWidget()
+        self.scrollLayout = QVBoxLayout()
+
+        self.__intiWidget()
+        self.__initLayout()
+
+    def __intiWidget(self):
+        self.yesButton.setText(self.tr('Copy to clipboard and exit'))
+        self.cancelButton.setText(self.tr('Exit'))
+
+        self.textEdit.setFixedWidth(int(self.width() * .6))
+        self.textEdit.setFixedHeight(int(self.height() * .4))
+
+    def __initLayout(self):
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.textEdit)
+
+
+class MultiChampionSelectMsgBox(MessageBoxBase):
+    completed = pyqtSignal(list)
+
+    def __init__(self, champions: dict, selected: list, parent=None):
+        super().__init__(parent)
+
+        self.myYesButton = PrimaryPushButton(self.tr('OK'), self.buttonGroup)
+        self.myCancelButton = QPushButton(self.tr('Cancel'), self.buttonGroup)
+
+        self.titleLabel = TitleLabel(self.tr("Choose Champions"))
+        self.championSelectWidget = MultiChampionSelectWidget(
+            champions, selected)
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initLayout(self):
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.championSelectWidget)
+
+        self.buttonLayout.addWidget(self.myYesButton)
+        self.buttonLayout.addWidget(self.myCancelButton)
+
+    def __initWidget(self):
+        self.yesButton.setVisible(False)
+        self.cancelButton.setVisible(False)
+        self.myCancelButton.setObjectName("cancelButton")
+
+        self.myYesButton.clicked.connect(self.__myOnYesButtonClicked)
+        self.myCancelButton.clicked.connect(self.__myOnCancelButtonClicked)
+
+        # 强迫症 TV 之这玩意左边多出来了
+        self.titleLabel.setStyleSheet("padding-left: 3px")
+
+    def __myOnYesButtonClicked(self):
+        self.completed.emit(
+            self.championSelectWidget.getSelectedChampionIds())
+
+        self.accept()
+        self.accepted.emit()
+
+    def __myOnCancelButtonClicked(self):
+        self.reject()
+        self.rejected.emit()
+
+
+class MultiPathSettingMsgBox(MessageBoxBase):
+
+    def __init__(self, paths: list, parent=None):
+        super().__init__(parent)
+        self.myYesButton = PrimaryPushButton(self.tr('OK'), self.buttonGroup)
+        self.myCancelButton = QPushButton(self.tr('Cancel'), self.buttonGroup)
+
+        self.titleLabel = TitleLabel(self.tr("Set LOL Client path"))
+        self.pathsWidget = PathDraggableWidget(paths)
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initLayout(self):
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.pathsWidget)
+
+        self.buttonLayout.addWidget(self.myYesButton)
+        self.buttonLayout.addWidget(self.myCancelButton)
+
+    def __initWidget(self):
+        self.yesButton.setVisible(False)
+        self.cancelButton.setVisible(False)
+        self.myCancelButton.setObjectName("cancelButton")
+
+        self.myYesButton.clicked.connect(self.__myOnYesButtonClicked)
+        self.myCancelButton.clicked.connect(self.__myOnCancelButtonClicked)
+
+        # 强迫症 TV 之这玩意左边多出来了
+        self.titleLabel.setStyleSheet("padding-left: 1px")
+
+    def __myOnYesButtonClicked(self):
+        cfg.set(cfg.lolFolder, self.pathsWidget.getCurrentPaths())
+
+        self.accept()
+        self.accepted.emit()
+
+    def __myOnCancelButtonClicked(self):
+        self.reject()
+        self.rejected.emit()
+
+
+class ChangeDpiMessageBox(MessageBoxBase):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+
+        self.myYesButton = PrimaryPushButton(
+            self.tr('OK'), self.buttonGroup)
+
+        self.titleLabel = TitleLabel(self.tr("Window is too big!"))
+        self.content = BodyLabel(
+            self.tr("We will reset your window size, please restart Seraphine."))
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initWidget(self):
+        self.yesButton.setVisible(False)
+        self.cancelButton.setVisible(False)
+
+        self.buttonLayout.addWidget(self.myYesButton)
+
+        self.titleLabel.setContentsMargins(5, 0, 5, 0)
+        self.content.setContentsMargins(8, 0, 5, 0)
+
+        self.myYesButton.clicked.connect(self.__onYesButtonClicked)
+
+    def __initLayout(self):
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.content)
+
+    def __onYesButtonClicked(self):
+        signalBus.terminateListeners.emit()
+        sys.exit()

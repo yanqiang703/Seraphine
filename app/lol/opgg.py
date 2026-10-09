@@ -1,0 +1,551 @@
+import os
+
+import aiohttp
+from async_lru import alru_cache
+
+from app.lol.connector import connector
+from app.common.config import cfg
+
+TAG = "opgg"
+
+CLASSIC_RUNE_ICON_FOLDER = "app/resource/game/classic rune icons"
+LEGACY_MASTERY_ICON_FOLDER = "app/resource/game/legacy mastery icons"
+
+
+class Opgg:
+    def __init__(self):
+        self.session = None
+        # Separate session (no base_url) for fetching assets off OP.GG's CDN
+        # host, which differs from the API host self.session is pinned to.
+        self.assetSession = None
+        self.proxy = None
+
+        if cfg.get(cfg.enableOpggProxy):
+            self.proxy = f"http://{cfg.get(cfg.opggProxyAddr)}"
+
+    async def start(self):
+        self.session = aiohttp.ClientSession("https://lol-api-champion.op.gg")
+        self.assetSession = aiohttp.ClientSession()
+
+    async def close(self):
+        if self.session:
+            await self.session.close()
+        if self.assetSession:
+            await self.assetSession.close()
+
+    async def __get(self, url, params=None):
+        res = await self.session.get(url, params=params, ssl=False, proxy=self.proxy)
+        return await res.json()
+
+    async def __downloadAndCacheAsset(self, url, folder, key):
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        path = f"{folder}/{key}.png"
+
+        if not os.path.exists(path):
+            res = await self.assetSession.get(url, ssl=False, proxy=self.proxy)
+            data = await res.read()
+
+            with open(path, 'wb') as f:
+                f.write(data)
+
+        return path
+
+    async def getClassicRuneIcon(self, url, sourceToken):
+        """
+        League Classic's old-style rune icons (Mark/Seal/Glyph/Quintessence)
+        are hosted on OP.GG's own CDN, not exposed by the LCU -- cache them
+        locally the same way champion/item/rune icons are cached elsewhere.
+        """
+        return await self.__downloadAndCacheAsset(url, CLASSIC_RUNE_ICON_FOLDER, sourceToken)
+
+    async def getLegacyMasteryIcon(self, url, masteryId):
+        """
+        Same as getClassicRuneIcon, but for the old Offense/Defense/Utility
+        mastery tree icons -- also CDN-hosted by OP.GG, also not in the LCU.
+        """
+        return await self.__downloadAndCacheAsset(url, LEGACY_MASTERY_ICON_FOLDER, masteryId)
+
+    @alru_cache(maxsize=512)
+    async def __fetchTierList(self, region, mode, tier):
+        url = f"/api/{region}/champions/{mode}"
+        params = {"tier": tier}
+
+        return await self.__get(url, params)
+
+    @alru_cache(maxsize=512)
+    async def __fetchChampionBuild(self, region, mode, championId, position, tier):
+        if mode != 'arena':
+            url = f"/api/{region}/champions/{mode}/{championId}/{position}"
+        else:
+            url = f"/api/{region}/champions/{mode}/{championId}"
+
+        params = {"tier": tier}
+
+        return await self.__get(url, params)
+
+    @alru_cache(maxsize=512)
+    async def getChampionBuild(self, region, mode, championId, position, tier):
+        positions = await self.getChampionPositions(region, championId, tier, mode)
+        if position not in positions and positions and mode in ('ranked', 'classic'):
+            position = positions[0]
+
+        raw = await self.__fetchChampionBuild(region, mode, championId, position, tier)
+
+        if mode != 'arena':
+            res = await OpggDataParser.parseOtherChampionBuild(raw, position)
+        else:
+            res = await OpggDataParser.parseArenaChampionBuild(raw)
+
+        return {
+            'data': res,
+            'version': raw['meta']['version'],
+            'mode': mode,
+        }
+
+    @alru_cache(maxsize=512)
+    async def getTierList(self, region, mode, tier):
+        raw = await self.__fetchTierList(region, mode, tier)
+
+        version = raw['meta']['version']
+
+        if mode == 'ranked':
+            res = await OpggDataParser.parseRankedTierList(raw)
+        else:
+            res = await OpggDataParser.parseOtherTierList(raw)
+
+        return {
+            'data': res,
+            'version': version
+        }
+
+    @alru_cache(maxsize=512)
+    async def getChampionPositions(self, region, championId, tier, mode="ranked"):
+        # This call is quite fast due to caching
+        data = await self.__fetchTierList(region, mode, tier)
+
+        for item in data['data']:
+            if item['id'] == championId:
+                return [p['name'] for p in item['positions'] or []]
+
+        return []
+
+
+class OpggDataParser:
+
+    @staticmethod
+    async def parseRankedTierList(data):
+        '''
+        Original tier data for Summoner's Rift mode, returns all champions and positions together
+
+        In this function, separate them by lane position
+        '''
+
+        data = data['data']
+        res = {p: []
+               for p in ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT']}
+
+        for item in data:
+            championId = item['id']
+            name = connector.manager.getChampionNameById(championId)
+            icon = await connector.getChampionIcon(championId)
+
+            for p in item['positions']:
+                position = p['name']
+
+                stats = p['stats']
+                tier = stats['tier_data']
+
+                counters = [{
+                    'championId': c['champion_id'],
+                    'icon': await connector.getChampionIcon(c['champion_id'])
+                } for c in p['counters']]
+
+                res[position].append({
+                    'championId': championId,
+                    'name': name,
+                    'icon': icon,
+                    'winRate': stats.get('win_rate'),
+                    'pickRate': stats.get('pick_rate'),
+                    'banRate': stats.get('ban_rate'),
+                    'kda': stats.get('kda'),
+                    'tier': tier.get('tier'),
+                    'rank': tier.get('rank'),
+                    'position': position,
+                    'counters': counters,
+                })
+
+        # Ranking/tier is unordered, so sort it
+        for tier in res.values():
+            tier.sort(key=lambda x: x['rank'])
+
+        return res
+
+    @staticmethod
+    async def parseOtherTierList(data):
+        '''
+        Process original tier data for other modes
+        '''
+
+        data = data['data']
+        res = []
+
+        for item in data:
+            stats = item['average_stats']
+
+            if stats == None:
+                continue
+
+            if stats.get('rank') == None:
+                continue
+
+            championId = item['id']
+            name = connector.manager.getChampionNameById(championId)
+            icon = await connector.getChampionIcon(championId)
+
+            res.append({
+                'championId': championId,
+                'name': name,
+                'icon': icon,
+                'winRate': stats.get('win_rate'),
+                'pickRate': stats.get('pick_rate'),
+                'banRate': stats.get('ban_rate'),
+                'kda': stats.get('kda'),
+                'tier': stats.get('tier'),
+                'rank': stats.get('rank'),
+                "position": None,
+                'counters': [],
+            })
+
+        return sorted(res, key=lambda x: x['rank'])
+
+    @staticmethod
+    async def parseOtherChampionBuild(data, position):
+        data = data['data']
+
+        summary = data['summary']
+        championId = summary['id']
+        icon = await connector.getChampionIcon(championId)
+        name = connector.manager.getChampionNameById(championId)
+
+        if position != 'none':
+            stats = {}
+            # 数据量少的英雄 positions 可能为 None
+            for p in summary['positions'] or []:
+                if p['name'] == position:
+                    stats: dict = p['stats'] or {}
+                    break
+
+            winRate = stats.get('win_rate')
+            pickRate = stats.get('pick_rate')
+            banRate = stats.get('ban_rate')
+            kda = stats.get('kda')
+
+            tierData: dict = stats.get('tier_data') or {}
+            tier = tierData.get("tier")
+            rank = tierData.get("rank")
+
+        else:
+            # 数据量少的英雄 average_stats 可能为 None
+            stats = summary['average_stats'] or {}
+            winRate = stats.get('win_rate')
+            pickRate = stats.get('pick_rate')
+            banRate = stats.get('ban_rate')
+            kda = stats.get('kda')
+            tier = stats.get("tier")
+            rank = stats.get("rank")
+
+        summonerSpells = []
+        for s in data['summoner_spells']:
+            if 'play' not in s:
+                continue
+
+            icons = [await connector.getSummonerSpellIcon(id)
+                     for id in s['ids']]
+
+            summonerSpells.append({
+                'ids': s['ids'],
+                'icons': icons,
+                'win': s['win'],
+                'play': s['play'],
+                'pickRate': s['pick_rate']
+            })
+
+        # League Classic mixes static "recommendation" entries (no play/win/
+        # pick_rate, just a source_type tag) in among the real stat-backed
+        # ones whenever a champion/position doesn't have enough games --
+        # filter those out everywhere rather than crash on a missing key.
+        def withStats(items):
+            return [i for i in (items or []) if 'play' in i]
+
+        # Low-sample-size modes/positions (e.g. League Classic) may not have
+        # enough games recorded to have any skill-order data at all.
+        skillMasteries = withStats(data['skill_masteries'])
+        skillOrders = withStats(data['skills'])
+        if skillMasteries and skillOrders:
+            skills = {
+                "masteries": skillMasteries[0]['ids'],
+                "order": skillOrders[0]['order'],
+                'play': skillOrders[0]['play'],
+                'win': skillOrders[0]['win'],
+                'pickRate': skillOrders[0]['pick_rate']
+            }
+        else:
+            skills = None
+
+        boots = []
+        for i in withStats(data['boots'])[:3]:
+            icons = [await connector.getItemIcon(id) for id in i['ids']]
+            boots.append({
+                "icons": icons,
+                "play": i['play'],
+                "win": i['win'],
+                'pickRate': i['pick_rate']
+            })
+
+        startItems = []
+        for i in withStats(data['starter_items'])[:3]:
+            icons = [await connector.getItemIcon(id) for id in i['ids']]
+            startItems.append({
+                "icons": icons,
+                "play": i['play'],
+                "win": i['win'],
+                'pickRate': i['pick_rate']
+            })
+
+        coreItems = []
+        for i in withStats(data['core_items'])[:5]:
+            icons = [await connector.getItemIcon(id) for id in i['ids']]
+            coreItems.append({
+                "icons": icons,
+                "play": i['play'],
+                "win": i['win'],
+                'pickRate': i['pick_rate']
+            })
+
+        lastItems = []
+        for i in withStats(data['last_items'])[:16]:
+            lastItems.append(await connector.getItemIcon(i['ids'][0]))
+
+        strongAgainst = []
+        weakAgainst = []
+
+        for c in data['counters']:
+            winRate = c['win'] / c['play']
+            arr = strongAgainst if winRate >= 0.5 else weakAgainst
+
+            arr.append({
+                'championId': (id := c['champion_id']),
+                'name': connector.manager.getChampionNameById(id),
+                'icon': await connector.getChampionIcon(id),
+                'play': c['play'],
+                'win': c['win'],
+                'winRate': winRate
+            })
+
+        strongAgainst.sort(key=lambda x: -x['winRate'])
+        weakAgainst.sort(key=lambda x: x['winRate'])
+
+        perks = [{
+            'primaryId': (mainId := perk['primary_page_id']),
+            "primaryIcon": await connector.getRuneIcon(mainId),
+            'secondaryId': (subId := perk['secondary_page_id']),
+            "secondaryIcon": await connector.getRuneIcon(subId),
+            'perks': (perkIds := perk['primary_rune_ids']+perk['secondary_rune_ids']+perk['stat_mod_ids']),
+            "icons": [await connector.getRuneIcon(id) for id in perkIds],
+            'play': perk['play'],
+            'win': perk['win'],
+            'pickRate': perk['pick_rate'],
+        } for perk in data['runes']
+        ]
+
+        # League Classic (and its ARAM: Mayhem Classic-ish variant) use the
+        # old pre-2017 Mark/Seal/Glyph/Quintessence rune system instead of
+        # the modern rune trees -- OP.GG exposes this separately as
+        # "classic_runes" since it has no relation to the modern "runes"
+        # field (which is always empty for these modes).
+        # Only the first page is ever shown (see ClassicRunesWidget), and
+        # alternate "recommendation" pages (source_type set instead of
+        # play/win/pick_rate) don't carry a source_token per rune -- so only
+        # parse that first page rather than crashing on the others.
+        classicRunePages = data.get('classic_runes') or []
+        classicRunes = [{
+            'runes': [{
+                'icon': await opgg.getClassicRuneIcon(rune['icon_url'], rune.get('source_token', rune['id'])),
+                'name': rune['name'],
+                'tooltip': rune['tooltip'],
+                'count': rune['count'],
+            } for rune in classicRunePages[0]['runes']],
+            'play': classicRunePages[0].get('play'),
+            'win': classicRunePages[0].get('win'),
+            'pickRate': classicRunePages[0].get('pick_rate'),
+        }] if classicRunePages else []
+
+        # ARAM: Mayhem Classic-ish has no runes at all (see classicRunes
+        # above), but -- like Mayhem and Arena -- does have an augment pick,
+        # exposed the same way Arena's "augment_group" is. Most modes don't
+        # have this field at all, so keep augments as None (not []) for
+        # them -- ChampionAugmentsWidget treats None as "hide", but an empty
+        # list would render as a blank card.
+        augmentGroup = data.get('augment_group')
+        hasAugmentData = augmentGroup and any(g['augments'] for g in augmentGroup)
+        augments = None if not hasAugmentData else [[{
+            "id": (augId := aug['id']),
+            "icon": await connector.getAugmentIcon(augId),
+            "name": connector.manager.getAugmentsName(augId),
+            "win": aug['win'],
+            'play': aug['play'],
+            'pickRate': aug['pick_rate']
+        } for aug in group['augments']] for group in augmentGroup]
+
+        # League Classic's old point-allocation mastery trees
+        # (Offense/Defense/Utility), separate from classicRunes above.
+        # OP.GG returns a couple of alternate "recommendation" pages with no
+        # play/win/pickRate to rank them by -- just show the first one.
+        legacyMasteryPages = data.get('legacy_masteries') or []
+        legacyMasteries = [{
+            'id': (mid := mastery['id']),
+            'icon': await opgg.getLegacyMasteryIcon(mastery['icon_url'], mid),
+            'name': mastery['name'],
+            'description': mastery['description'],
+            'tree': mastery['tree'],
+            'rank': mastery['rank'],
+            'maxRank': mastery['max_rank'],
+        } for mastery in (legacyMasteryPages[0]['masteries'] if legacyMasteryPages else [])]
+
+        return {
+            "summary": {
+                'name': name,
+                'championId': championId,
+                'icon': icon,
+                'position': position,
+                'winRate': winRate,
+                'pickRate': pickRate,
+                'banRate': banRate,
+                'kda': kda,
+                'tier': tier,
+                'rank': rank
+            },
+            "summonerSpells": summonerSpells,
+            "championSkills": skills,
+            "items": {
+                "boots": boots,
+                "startItems": startItems,
+                "coreItems": coreItems,
+                "lastItems": lastItems,
+            },
+            "counters": {
+                "strongAgainst": strongAgainst,
+                "weakAgainst": weakAgainst,
+            },
+            "perks": perks,
+            "classicRunes": classicRunes,
+            "legacyMasteries": legacyMasteries,
+            "augments": augments,
+        }
+
+    @staticmethod
+    async def parseArenaChampionBuild(data):
+        data = data['data']
+
+        summary = data['summary']
+        championId = summary['id']
+        name = connector.manager.getChampionNameById(championId)
+        icon = await connector.getChampionIcon(championId)
+
+        stats = summary['average_stats']
+        play = stats['play']
+        winRate = stats['win'] / play
+        firstRate = stats['first_place'] / play
+        averagePlace = stats['total_place'] / play
+        pickRate = stats['pick_rate']
+        banRate = stats['ban_rate']
+        tier = stats['tier']
+
+        skills = {
+            "masteries": data['skill_masteries'][0]['ids'],
+            "order": data['skills'][0]['order'],
+            'play': data['skills'][0]['play'],
+            'win': data['skills'][0]['win'],
+            'pickRate': data['skills'][0]['pick_rate']
+        }
+
+        async def parseItemGroup(items, limit):
+            res = []
+            for i in (items or [])[:limit]:
+                icons = [await connector.getItemIcon(id) for id in i['ids']]
+                res.append({
+                    "icons": icons,
+                    "play": i['play'],
+                    "win": i['win'],
+                    'pickRate': i['pick_rate'],
+                    "averatePlace": i['total_place'] / i['play'],
+                    "firstRate": i['first_place'] / i['play']
+                })
+
+            return res
+
+        boots = await parseItemGroup(data.get('boots'), 3)
+        startItems = await parseItemGroup(data.get('starter_items'), 3)
+        prismItems = await parseItemGroup(data.get('prism_items'), 3)
+        coreItems = await parseItemGroup(data.get('core_items'), 5)
+
+        lastItems = []
+        for i in (data.get('last_items') or [])[:16]:
+            lastItems.append(await connector.getItemIcon(i['ids'][0]))
+
+        augments = []
+        for item in data['augment_group']:
+            arr = [{
+                "id": (augId := aug['id']),
+                "icon": await connector.getAugmentIcon(augId),
+                "name": connector.manager.getAugmentsName(augId),
+                "win": aug['win'],
+                'play': aug['play'],
+                "totalPlace": aug['total_place'],
+                "firstPlace": aug['first_place'],
+                'pickRate': aug['pick_rate']
+            }for aug in item['augments']]
+
+            augments.append(arr)
+
+        synergies = [{
+            "championId": (chId := syn['champion_id']),
+            'icon': await connector.getChampionIcon(chId),
+            "name": connector.manager.getChampionNameById(chId),
+            "win": syn['win'],
+            'play': syn['play'],
+            "totalPlace": syn['total_place'],
+            "firstPlace": syn['first_place'],
+            'pickRate': syn['pick_rate']
+        }for syn in data['synergies']]
+
+        return {
+            "summary": {
+                "name": name,
+                "icon": icon,
+                "championId": championId,
+                "play": play,
+                "winRate": winRate,
+                "firstRate": firstRate,
+                "averagePlace": averagePlace,
+                "pickRate": pickRate,
+                "banRate": banRate,
+                "tier": tier,
+                "position": "none"
+            },
+            "championSkills": skills,
+            "items": {
+                "boots": boots,
+                "startItems": startItems,
+                "prismItems": prismItems,
+                "coreItems": coreItems,
+                "lastItems": lastItems,
+            },
+            "augments": augments,
+            "synergies": synergies,
+        }
+
+
+opgg = Opgg()
