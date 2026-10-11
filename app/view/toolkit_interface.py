@@ -232,12 +232,15 @@ class ClaimPage(QWidget):
     def __toggleAll(self, table, checked):
         state = Qt.Checked if checked else Qt.Unchecked
         for row in range(table.rowCount()):
-            table.item(row, 0).setCheckState(state)
+            item = table.item(row, 0)
+            if item is not None:
+                item.setCheckState(state)
 
     def __onSelectionChanged(self, table, selectAllBox, actionBtn, actionText):
         total = table.rowCount()
         checked = sum(1 for i in range(total)
-                      if table.item(i, 0).checkState() == Qt.Checked)
+                      if table.item(i, 0) is not None
+                      and table.item(i, 0).checkState() == Qt.Checked)
 
         selectAllBox.blockSignals(True)
         if checked == 0:
@@ -252,7 +255,9 @@ class ClaimPage(QWidget):
 
     def __checkedData(self, table, data):
         return [data[i] for i in range(table.rowCount())
-                if table.item(i, 0).checkState() == Qt.Checked]
+                if i < len(data)
+                and table.item(i, 0) is not None
+                and table.item(i, 0).checkState() == Qt.Checked]
 
     def __setGrantsBusy(self, busy):
         self.busy = busy
@@ -284,6 +289,7 @@ class ClaimPage(QWidget):
             grants = await connector.getRewardGrants()
             self.grantsData = grants or []
 
+            self.grantsTable.blockSignals(True)
             self.grantsTable.setRowCount(len(self.grantsData))
             for row, grant in enumerate(self.grantsData):
                 rg = grant.get("rewardGroup", {})
@@ -296,6 +302,7 @@ class ClaimPage(QWidget):
                 self.grantsTable.setCellWidget(
                     row, 1, nameCell(groupTitle, "、".join(names)))
                 self.grantsTable.resizeRowToContents(row)
+            self.grantsTable.blockSignals(False)
         except Exception as e:
             logger.error(f"refreshGrants failed: {e}")
             if manual:
@@ -397,6 +404,7 @@ class ClaimPage(QWidget):
             self.eventsData = await asyncio.gather(
                 *[work(e) for e in events])
 
+            self.eventsTable.blockSignals(True)
             self.eventsTable.setRowCount(len(self.eventsData))
             for row, (event, names) in enumerate(self.eventsData):
                 info = event.get("eventInfo", {})
@@ -406,6 +414,7 @@ class ClaimPage(QWidget):
                 self.eventsTable.setItem(row, 0, checkItem())
                 self.eventsTable.setCellWidget(row, 1, nameCell(title, subtitle))
                 self.eventsTable.resizeRowToContents(row)
+            self.eventsTable.blockSignals(False)
         except Exception as e:
             logger.error(f"refreshEvents failed: {e}")
             if manual:
