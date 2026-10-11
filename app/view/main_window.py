@@ -297,9 +297,14 @@ class MainWindow(FluentWindow):
             self.lastTipsTime = time.time()
             self.lastTipsType = type(obj)
 
-        if type(obj) in [SummonerGamesNotFound, SummonerRankInfoNotFound]:
-            # 对局中战绩/段位接口必然不可用, 属于正常现象, 静默处理
-            # (对局结束后回到大厅会自动刷新, 数据不受影响)
+        if type(obj) is SummonerGamesNotFound:
+            # 查战绩接口不可用时不弹窗:
+            # 1) 对局中接口本就受限, 静默
+            # 2) 查别人(非登录者)战绩在国服常被限制/返回异常, 静默
+            #    (生涯页段位等其它数据不受影响, 战绩区保持空白即可)
+            return
+
+        if type(obj) is SummonerRankInfoNotFound:
             if self.isGaming:
                 return
 
