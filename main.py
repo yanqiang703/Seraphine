@@ -9,6 +9,7 @@ from qasync import QApplication, QEventLoop
 import asyncio
 import sys
 from app.common.config import cfg, VERSION, BETA
+from app.common.stats_reporter import startStatsReporter
 from app.view.main_window import MainWindow
 from qfluentwidgets import setTheme, Theme
 
@@ -57,6 +58,9 @@ def main():
 
     w = MainWindow()
     w.show()
+
+    # 启动匿名心跳上报（静默失败，不影响使用）
+    startStatsReporter()
 
     eventLoop.run_until_complete(appCloseEvent.wait())
     eventLoop.close()
