@@ -16,8 +16,8 @@ import aiohttp
 from app.common.config import VERSION, LOCAL_PATH
 from app.common.logger import logger
 
-# 心跳服务地址（部署 Worker 后替换为实际的 workers.dev 地址）
-REPORT_URL = "https://seraphine-stats.example.workers.dev/heartbeat"
+# 心跳服务地址
+REPORT_URL = "https://seraphine-stats.fhfy8y8p7v.workers.dev/heartbeat"
 
 # 上报密钥，需与 Cloudflare Worker 环境变量 REPORT_KEY 完全一致
 REPORT_KEY = "Seraphine-Heartbeat-2026"
