@@ -153,6 +153,12 @@ class MiniTitleBar(QFrame):
         self.pinButton.setChecked(cfg.get(cfg.miniWindowOnTop))
         self.pinButton.setToolTip("窗口置顶")
 
+        # FramelessWindow.nativeEvent 会访问 titleBar.maxBtn 判断鼠标悬停，
+        # 没有最大化按钮就给一个不可见的占位按钮，防止 AttributeError
+        from qframelesswindow.titlebar.title_bar_buttons import MaximizeButton
+        self.maxBtn = MaximizeButton()
+        self.maxBtn.setVisible(False)
+
         self.hBoxLayout = QHBoxLayout(self)
         self.hBoxLayout.setContentsMargins(14, 0, 6, 0)
         self.hBoxLayout.setSpacing(2)

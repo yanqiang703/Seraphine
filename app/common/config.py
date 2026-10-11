@@ -202,7 +202,7 @@ class Config(QConfig):
         "General", "EnableSilent", False, BoolValidator())
 
     enableMiniWindow = ConfigItem(
-        "General", "EnableMiniWindow", True, BoolValidator())
+        "General", "EnableMiniWindow", False, BoolValidator())
     miniWindowOnTop = ConfigItem(
         "General", "MiniWindowOnTop", True, BoolValidator())
 
@@ -238,7 +238,7 @@ class Config(QConfig):
     }, QueueFilterValidator())
 
 
-VERSION = "2.0"
+VERSION = "2.1"
 BETA = None
 LOCAL_PATH = f"{os.getenv('APPDATA')}\\Seraphine"
 

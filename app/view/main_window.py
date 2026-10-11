@@ -298,6 +298,11 @@ class MainWindow(FluentWindow):
             self.lastTipsType = type(obj)
 
         if type(obj) in [SummonerGamesNotFound, SummonerRankInfoNotFound]:
+            # 对局中战绩/段位接口必然不可用, 属于正常现象, 静默处理
+            # (对局结束后回到大厅会自动刷新, 数据不受影响)
+            if self.isGaming:
+                return
+
             msg = self.tr(
                 "The server returned abnormal content, which may be under maintenance.")
         elif type(obj) is RetryMaximumAttempts:

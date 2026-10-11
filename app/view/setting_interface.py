@@ -113,7 +113,7 @@ class SettingInterface(SeraphineInterface):
         self.miniWindowCard = SwitchSettingCard(
             Icon.WINDOW,
             "Mini 悬浮窗",
-            "进入房间时自动显示，退出房间时自动隐藏",
+            "进入房间时自动显示，退出房间时自动隐藏，支持 0 秒抢英雄",
             configItem=cfg.enableMiniWindow,
             parent=self.generalGroup)
 
