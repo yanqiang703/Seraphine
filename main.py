@@ -1,9 +1,11 @@
 # coding:utf-8
+import ctypes
 import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QTranslator
+from PyQt5.QtWidgets import QMessageBox
 from app.common.qfluentwidgets import FluentTranslator
 from qasync import QApplication, QEventLoop
 import asyncio
@@ -13,12 +15,20 @@ from app.common.stats_reporter import startStatsReporter
 from app.view.main_window import MainWindow
 from qfluentwidgets import setTheme, Theme
 
+# 单实例互斥锁，必须保持引用直到进程退出
+singleInstanceMutex = None
+
 
 def main():
     args = sys.argv
     if len(args) == 2 and args[1] in ['--version', '-v']:
         print(BETA or VERSION)
         return
+
+    global singleInstanceMutex
+    singleInstanceMutex = ctypes.windll.kernel32.CreateMutexW(
+        None, False, "Seraphine-SingleInstance-Mutex")
+    alreadyRunning = ctypes.windll.kernel32.GetLastError() == 183  # ERROR_ALREADY_EXISTS
 
     if cfg.get(cfg.dpiScale) == "Auto":
         QApplication.setHighDpiScaleFactorRoundingPolicy(
@@ -36,6 +46,10 @@ def main():
 
     app = QApplication(sys.argv)
     app.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings)
+
+    if alreadyRunning:
+        QMessageBox.warning(None, "Seraphine", "Seraphine 已经在运行中，请勿重复启动。")
+        sys.exit(0)
 
     # 默认深色主题
     if cfg.get(cfg.themeMode) == Theme.LIGHT:
