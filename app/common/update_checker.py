@@ -7,8 +7,7 @@
 import asyncio
 import aiohttp
 import json
-from PyQt5.QtCore import QObject, pyqtSignal, QUrl
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QObject, pyqtSignal
 from app.common.config import VERSION, BETA
 from app.common.logger import logger
 
@@ -23,14 +22,18 @@ TIMEOUT = 8
 
 class UpdateChecker(QObject):
     """检查更新/推送通知，通过信号通知主窗口弹窗"""
-    # 信号参数: title, content, url, password
+    # 发现新版本: title, content, url, password
     updateAvailable = pyqtSignal(str, str, str, str)
+    # 当前已是最新版本
+    noUpdate = pyqtSignal()
+    # 检查失败（网络等）
+    checkFailed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
     async def check(self):
-        """启动后异步检查，失败静默"""
+        """异步检查，通过信号通知结果"""
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
@@ -40,6 +43,7 @@ class UpdateChecker(QObject):
                 ) as resp:
                     if resp.status != 200:
                         logger.info(f"Update check: HTTP {resp.status}", TAG)
+                        self.checkFailed.emit(f"服务器返回 {resp.status}")
                         return
                     text = await resp.text()
                     data = json.loads(text)
@@ -47,6 +51,7 @@ class UpdateChecker(QObject):
             # 推送开关
             if not data.get("enabled", True):
                 logger.info("Update check: disabled by notice.json", TAG)
+                self.noUpdate.emit()
                 return
 
             # 对比版本号
@@ -55,6 +60,7 @@ class UpdateChecker(QObject):
             if not latest or latest == current:
                 logger.info(
                     f"Update check: same version ({current})", TAG)
+                self.noUpdate.emit()
                 return
 
             # 新版本更高 → 弹窗
@@ -74,7 +80,10 @@ class UpdateChecker(QObject):
 
         except asyncio.TimeoutError:
             logger.info("Update check: timeout (network)", TAG)
+            self.checkFailed.emit("网络超时，请检查网络连接")
         except json.JSONDecodeError as e:
             logger.info(f"Update check: invalid JSON ({e})", TAG)
+            self.checkFailed.emit("服务器返回数据格式错误")
         except Exception as e:
             logger.info(f"Update check: failed ({e})", TAG)
+            self.checkFailed.emit(f"检查失败：{e}")

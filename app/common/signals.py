@@ -36,5 +36,8 @@ class SignalBus(QObject):
     # OPGG:
     toOpggBuildInterface = pyqtSignal(int, str, str)
 
+    # 更新检查
+    checkUpdateRequested = pyqtSignal()
+
 
 signalBus = SignalBus()

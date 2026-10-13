@@ -114,6 +114,9 @@ class MainWindow(FluentWindow):
         self.updateChecker = UpdateChecker(self)
         self.updateChecker.updateAvailable.connect(
             self.__onUpdateAvailable)
+        self.updateChecker.noUpdate.connect(
+            lambda: self.__onCheckResult("当前已是最新版本"))
+        self.updateChecker.checkFailed.connect(self.__onCheckResult)
         QTimer.singleShot(5000, self.__checkUpdate)
 
         self.__silentStart()
@@ -253,6 +256,7 @@ class MainWindow(FluentWindow):
             self.__refreshCareerInterface)
         self.settingInterface.micaCard.checkedChanged.connect(
             self.__cascadeSetMicaEffect)
+        signalBus.checkUpdateRequested.connect(self.__onCheckUpdateButton)
 
         # From main_window
         self.stackedWidget.currentChanged.connect(
@@ -718,6 +722,31 @@ class MainWindow(FluentWindow):
     async def __checkUpdate(self):
         """启动后异步检查推送"""
         await self.updateChecker.check()
+
+    def __onCheckUpdateButton(self):
+        """设置页"检查更新"按钮点击"""
+        InfoBar.info(
+            title="检查更新",
+            content="正在检查更新，请稍候...",
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=3000,
+            parent=self,
+        )
+        asyncio.ensure_future(self.updateChecker.check())
+
+    def __onCheckResult(self, msg):
+        """检查结果反馈（无新版本或失败）"""
+        InfoBar.info(
+            title="检查更新",
+            content=msg,
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=4000,
+            parent=self,
+        )
 
     def __onUpdateAvailable(self, title, content, url, password):
         """收到新版本通知，弹 InfoBar"""

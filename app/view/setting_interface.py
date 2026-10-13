@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import QWidget, QLabel, QFileDialog
 from app.common.icons import Icon
 from app.common.config import cfg, isWin11, LOCAL_PATH
 from app.common.style_sheet import StyleSheet
+from app.common.signals import signalBus
 from app.components.seraphine_interface import SeraphineInterface
 from app.components.setting_cards import (LineEditSettingCard, GameTabColorSettingCard,
                                           LooseSwitchSettingCard, ProxySettingCard,
@@ -160,6 +161,14 @@ class SettingInterface(SeraphineInterface):
             configItem=cfg.enableCloseToTray,
             parent=self.generalGroup)
 
+        self.checkUpdateCard = PushSettingCard(
+            self.tr("检查更新"), Icon.UPDATE, self.tr("软件更新"),
+            self.tr("检查是否有新版本并下载"),
+            self.generalGroup)
+        self.checkUpdateCard.button.setFixedWidth(100)
+        self.checkUpdateCard.button.setStyleSheet(
+            "QPushButton {padding-left: 0; padding-right: 0;}")
+
         self.personalizationGroup = SettingCardGroup(
             self.tr("Personalization"), self.scrollWidget)
 
@@ -262,6 +271,7 @@ class SettingInterface(SeraphineInterface):
         self.generalGroup.addSettingCard(self.enableCloseToTray)
         self.generalGroup.addSettingCard(self.silentCard)
         self.generalGroup.addSettingCard(self.miniWindowCard)
+        self.generalGroup.addSettingCard(self.checkUpdateCard)
 
         self.logGroup.addSettingCard(self.logLevelCard)
         self.logGroup.addSettingCard(self.viewLogCard)
@@ -297,6 +307,8 @@ class SettingInterface(SeraphineInterface):
         self.viewLogCard.clicked.connect(
             lambda: os.system(f'explorer {LOCAL_PATH}\\log')
         )
+        self.checkUpdateCard.clicked.connect(
+            lambda: signalBus.checkUpdateRequested.emit())
 
     def __onLolFolderCardClicked(self):
         current = cfg.get(cfg.lolFolder)
