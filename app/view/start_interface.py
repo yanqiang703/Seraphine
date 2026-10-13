@@ -38,6 +38,10 @@ class StartInterface(SeraphineInterface):
         self.pathComboBox = ComboBox()
         self.pathLayout = QHBoxLayout()
 
+        self.launcherComboBox = ComboBox()
+        self.launcherLayout = QHBoxLayout()
+        self.launcherLabel = QLabel()
+
         self.__initWidget()
         self.__initLayout()
         self.showLoadingPage()
@@ -51,6 +55,11 @@ class StartInterface(SeraphineInterface):
         self.pathLayout.addWidget(self.label2)
         self.pathLayout.addWidget(self.pathComboBox)
 
+        self.launcherLayout.setContentsMargins(0, 0, 0, 0)
+        self.launcherLayout.setAlignment(Qt.AlignCenter)
+        self.launcherLayout.addWidget(self.launcherLabel)
+        self.launcherLayout.addWidget(self.launcherComboBox)
+
         self.vBoxLayout.addWidget(self.processBar)
         self.vBoxLayout.addItem(
             QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
@@ -59,6 +68,7 @@ class StartInterface(SeraphineInterface):
         self.vBoxLayout.addWidget(self.pushButton, alignment=Qt.AlignCenter)
         self.vBoxLayout.addWidget(self.label3, alignment=Qt.AlignCenter)
         self.vBoxLayout.addSpacing(20)
+        self.vBoxLayout.addLayout(self.launcherLayout)
         self.vBoxLayout.addLayout(self.pathLayout)
         self.vBoxLayout.addItem(
             QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
@@ -74,8 +84,37 @@ class StartInterface(SeraphineInterface):
         paths = cfg.get(cfg.lolFolder)
         self.pathComboBox.addItems(paths)
 
+        self.launcherLabel.setText("启动方式: ")
+        self.launcherComboBox.addItems(["TCLS 客户端", "WeGame"])
+        self.__syncLauncherComboBox()
+
         self.__connectSignalToSlot()
         StyleSheet.START_INTERFACE.apply(self)
+
+    def __syncLauncherComboBox(self):
+        # 与设置页的启动方式保持一致
+        text = "WeGame" if cfg.get(cfg.launcherType) == "WeGame" else "TCLS 客户端"
+        self.launcherComboBox.blockSignals(True)
+        self.launcherComboBox.setCurrentText(text)
+        self.launcherComboBox.blockSignals(False)
+        self.__updatePathRowVisible()
+
+    def __updatePathRowVisible(self):
+        # WeGame 启动不需要选择客户端路径; 仅在等待连接时调整
+        if not self.loading:
+            return
+        visible = cfg.get(cfg.launcherType) != "WeGame"
+        self.label2.setVisible(visible)
+        self.pathComboBox.setVisible(visible)
+
+    def __onLauncherComboBoxChanged(self, text):
+        cfg.set(cfg.launcherType,
+                "WeGame" if text == "WeGame" else "TCLS")
+        self.__updatePathRowVisible()
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self.__syncLauncherComboBox()
 
     def hideLoadingPage(self):
         self.processBar.stop()
@@ -86,6 +125,8 @@ class StartInterface(SeraphineInterface):
             f"PID = {connector.pid}\n--app-port = {connector.port}\n--remoting-auth-token = {connector.token}")
         self.label3.setVisible(False)
         self.pathComboBox.setVisible(False)
+        self.launcherLabel.setVisible(False)
+        self.launcherComboBox.setVisible(False)
 
         self.pushButton.setText(self.tr("Change client connected"))
         self.pushButton.setIcon(Icon.DUALSCREEN)
@@ -99,13 +140,17 @@ class StartInterface(SeraphineInterface):
         self.label3.setText(self.tr("(You can launch LOL by other means)"))
 
         self.label3.setVisible(True)
-        self.pathComboBox.setVisible(True)
+        self.launcherLabel.setVisible(True)
+        self.launcherComboBox.setVisible(True)
+        self.__updatePathRowVisible()
 
         self.pushButton.setIcon(Icon.CIRCLERIGHT)
         self.pushButton.setText(self.tr("Start LOL Client"))
 
     def __connectSignalToSlot(self):
         self.pushButton.clicked.connect(self.__onPushButtonClicked)
+        self.launcherComboBox.currentTextChanged.connect(
+            self.__onLauncherComboBoxChanged)
 
     def __onPushButtonClicked(self):
         if self.loading:
