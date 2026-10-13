@@ -759,18 +759,16 @@ def parseDetailRankInfo(rankInfo):
 
         wins = info['wins']
         losses = info['losses']
-        # 腾讯 SGP 查他人段位会脱敏: 负场恒为 0, 此时胜/负/总场/胜率均不保真, 显示 --
-        sanitized = wins > 0 and losses == 0
         total = wins + losses
         winRate = wins * 100 // total if total != 0 else 0
         lp = info['leaguePoints']
 
         return [
             label,
-            '--' if sanitized else str(total),
-            '--' if sanitized else (str(winRate) + ' %' if total != 0 else '--'),
-            '--' if sanitized else str(wins),
-            '--' if sanitized else str(losses),
+            str(total),
+            str(winRate) + ' %' if total != 0 else '--',
+            str(wins),
+            str(losses),
             f'{tier} {division}',
             str(lp),
             f'{highestTier} {highestDivision}',
