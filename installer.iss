@@ -1,13 +1,13 @@
 [Setup]
 AppName=Seraphine
-AppVersion=2.1
+AppVersion=2.2
 AppPublisher=Seraphine
 DefaultDirName={autopf}\Seraphine
 DefaultGroupName=Seraphine
 UninstallDisplayIcon={app}\Seraphine.exe
 UninstallDisplayName=Seraphine
 OutputDir=installer_output
-OutputBaseFilename=SeraphineSetup_2.1
+OutputBaseFilename=SeraphineSetup_2.2
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
