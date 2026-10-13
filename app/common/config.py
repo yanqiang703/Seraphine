@@ -64,6 +64,10 @@ class Config(QConfig):
     lolFolder = ConfigItem("General", "LolPath", [])
     enableStartLolWithApp = ConfigItem("General", "EnableStartLolWithApp",
                                        False, BoolValidator())
+    # 启动方式：TCLS 客户端 / WeGame
+    launcherType = OptionsConfigItem(
+        "General", "LauncherType", "TCLS",
+        OptionsValidator(["TCLS", "WeGame"]))
 
     micaEnabled = ConfigItem(
         "Personalization", "MicaEnabled", isWin11(), BoolValidator())

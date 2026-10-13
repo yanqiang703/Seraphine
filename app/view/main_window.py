@@ -625,6 +625,26 @@ class MainWindow(FluentWindow):
             self.__startLolClient()
 
     def __startLolClient(self):
+        # 根据启动方式分流
+        if cfg.get(cfg.launcherType) == "WeGame":
+            # WeGame 启动：通过 URL scheme（WeGame 会注册 wegame:// 协议，英雄联盟 game_id=26）
+            try:
+                os.startfile("wegame://launch?game_id=26")
+                self.__showStartLolSuccessInfo()
+            except OSError as e:
+                logger.warning(f"Start via WeGame failed: {e}", TAG)
+                InfoBar.error(
+                    title="启动失败",
+                    content="未检测到 WeGame，请确认已安装 WeGame 客户端",
+                    orient=Qt.Vertical,
+                    isClosable=True,
+                    position=InfoBarPosition.BOTTOM_RIGHT,
+                    duration=5000,
+                    parent=self,
+                )
+            return
+
+        # TCLS 客户端启动：直接在 lolFolder 下找可执行文件
         for clientName in ("client.exe", "LeagueClient.exe"):
             path = f'{cfg.get(cfg.lolFolder)[0]}/{clientName}'
             if os.path.exists(path):

@@ -144,6 +144,14 @@ class SettingInterface(SeraphineInterface):
             self.tr("Launch LOL client upon opening Seraphine automatically"),
             configItem=cfg.enableStartLolWithApp,
             parent=self.generalGroup)
+
+        self.launcherTypeCard = ComboBoxSettingCard(
+            cfg.launcherType,
+            Icon.GAME,
+            "启动方式",
+            "选择启动英雄联盟客户端的方式：TCLS 客户端 / WeGame",
+            texts=["TCLS 客户端", "WeGame"],
+            parent=self.generalGroup)
         self.deleteResourceCard = PushSettingCard(
             self.tr("Delete"), Icon.DELETE, self.tr("Delete cache"),
             self.
@@ -267,6 +275,7 @@ class SettingInterface(SeraphineInterface):
 
         self.generalGroup.addSettingCard(self.lolFolderCard)
         self.generalGroup.addSettingCard(self.enableStartLolWithApp)
+        self.generalGroup.addSettingCard(self.launcherTypeCard)
         self.generalGroup.addSettingCard(self.deleteResourceCard)
         self.generalGroup.addSettingCard(self.enableCloseToTray)
         self.generalGroup.addSettingCard(self.silentCard)
