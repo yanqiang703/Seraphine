@@ -954,14 +954,23 @@ async def parseSingleSummonerGameInfo(item, queueId, currentSummonerId, useSGP=F
 def convertSgpGameToLcu(game, puuid):
     """
     SGP match-history-query 的 game 转为 LCU 结构, 便于复用 parseGameData:
-    提取 json 字段, 被查玩家提到 participants[0], 平铺字段通过 stats 键自引用
+    提取 json 字段, 被查玩家提到 participants[0], 平铺字段通过 stats 键自引用,
+    并补齐 LCU 特有的 perk0 (符文) 与 timeline (分路) 结构
     """
     g = game["json"]
     participants = g.get("participants", [])
     # python sort 稳定, 被查玩家置首位, 其余保持原顺序
     participants.sort(key=lambda p: 0 if p.get("puuid") == puuid else 1)
     for p in participants:
-        p.setdefault("stats", p)
+        stats = p.setdefault("stats", p)
+        if "perk0" not in stats:
+            # SGP 符文结构: perks.styles[0].selections[0].perk
+            try:
+                stats["perk0"] = p["perks"]["styles"][0]["selections"][0]["perk"]
+            except Exception:
+                stats["perk0"] = 0
+        if "timeline" not in p:
+            p["timeline"] = {"lane": p.get("lane", ""), "role": p.get("role", "")}
     return g
 
 
@@ -984,19 +993,30 @@ async def getSummonerGamesCompat(puuid, begIdx, endIdx):
 
 
 def convertSgpRankedStatsToLcu(info):
-    """SGP leagues-ledge rankedStats 转为 LCU ranked-stats 结构, 复用 parseRankInfo"""
+    """SGP leagues-ledge rankedStats 转为 LCU ranked-stats 结构, 复用 parseDetailRankInfo"""
     queueMap = {}
     for q in info.get("queues", []):
+        tier = q.get("tier", "")
+        division = q.get("rank", "NA")
         queueMap[q.get("queueType", "")] = {
-            "tier": q.get("tier", ""),
-            "division": q.get("rank", "NA"),
-            "leaguePoints": q.get("leaguePoints", ""),
+            "tier": tier,
+            "division": division,
+            "leaguePoints": q.get("leaguePoints", 0),
+            "wins": q.get("wins", 0),
+            "losses": q.get("losses", 0),
+            "highestTier": q.get("highestTier", tier),
+            "highestDivision": q.get("highestDivision", division),
+            "previousSeasonEndTier": q.get("previousSeasonEndTier", ""),
+            "previousSeasonEndDivision": q.get("previousSeasonEndDivision", "NA"),
         }
 
-    # parseRankInfo 直接下标访问这两个队列, 缺失时补空避免 KeyError
-    for queueType in ("RANKED_SOLO_5x5", "RANKED_FLEX_SR"):
-        queueMap.setdefault(
-            queueType, {"tier": "", "division": "NA", "leaguePoints": ""})
+    # parseDetailRankInfo 直接下标访问这三个队列, 缺失时补空避免 KeyError
+    emptyQueue = {"tier": "", "division": "NA", "leaguePoints": 0,
+                  "wins": 0, "losses": 0,
+                  "highestTier": "", "highestDivision": "NA",
+                  "previousSeasonEndTier": "", "previousSeasonEndDivision": "NA"}
+    for queueType in ("RANKED_SOLO_5x5", "RANKED_FLEX_SR", "RANKED_TFT"):
+        queueMap.setdefault(queueType, dict(emptyQueue))
 
     return {"queueMap": queueMap}
 
