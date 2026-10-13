@@ -928,23 +928,30 @@ async def parseTftGames(games, puuid):
     return hitGames, wins, losses, averagePlacement
 
 
+async def parseSingleSummonerGameInfo(item, queueId, currentSummonerId, useSGP=False):
+    """
+    单个玩家的对局信息查询 (与 LeagueAkari 一致的单人粒度策略):
+    国服优先 SGP, SGP 失败仅对该玩家回退 LCU; 双路都失败返回 None (该玩家留空),
+    不影响其他玩家的查询
+    """
+    if useSGP and connector.isInTencent():
+        try:
+            return await getSummonerGamesInfoViaSGP(item, queueId, currentSummonerId)
+        except Exception:
+            # 仅该玩家回退 LCU, 不拖累整队
+            pass
+
+    try:
+        return await parseSummonerGameInfo(item, queueId, currentSummonerId)
+    except Exception:
+        return None
+
+
 async def parseAllyGameInfo(session, currentSummonerId, queueID, useSGP=False):
 
-    if useSGP and connector.isInTencent():
-        # 如果是国服就优先尝试 SGP
-        try:
-            tasks = [getSummonerGamesInfoViaSGP(item, queueID, currentSummonerId)
-                     for item in session['myTeam']]
-            summoners = await asyncio.gather(*tasks)
-        except:
-            tasks = [parseSummonerGameInfo(item, queueID, currentSummonerId)
-                     for item in session['myTeam']]
-            summoners = await asyncio.gather(*tasks)
-
-    else:
-        tasks = [parseSummonerGameInfo(item, queueID, currentSummonerId)
-                 for item in session['myTeam']]
-        summoners = await asyncio.gather(*tasks)
+    tasks = [parseSingleSummonerGameInfo(item, queueID, currentSummonerId, useSGP)
+             for item in session['myTeam']]
+    summoners = await asyncio.gather(*tasks)
 
     summoners = [summoner for summoner in summoners if summoner]
 
@@ -981,22 +988,10 @@ async def parseGameInfoByGameflowSession(session, currentSummonerId, side, useSG
     else:
         team, _ = separateTeams(data, currentSummonerId)
 
-    if useSGP and connector.isInTencent():
-        # 如果是国服就优先尝试 SGP
-        try:
-            tasks = [getSummonerGamesInfoViaSGP(item, queueId, currentSummonerId)
-                     for item in team]
-            summoners = await asyncio.gather(*tasks)
-
-        except:
-            tasks = [parseSummonerGameInfo(item, queueId, currentSummonerId)
-                     for item in team]
-            summoners = await asyncio.gather(*tasks)
-
-    else:
-        tasks = [parseSummonerGameInfo(item, queueId, currentSummonerId)
-                 for item in team]
-        summoners = await asyncio.gather(*tasks)
+    # 单人粒度: 国服优先 SGP, 失败仅该玩家回退 LCU, 双路都失败则该玩家留空
+    tasks = [parseSingleSummonerGameInfo(item, queueId, currentSummonerId, useSGP)
+             for item in team]
+    summoners = await asyncio.gather(*tasks)
 
     summoners = [summoner for summoner in summoners if summoner]
 
