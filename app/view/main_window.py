@@ -91,6 +91,8 @@ class MainWindow(FluentWindow):
         self.currentSummoner = None
 
         self.isGaming = False
+        # 选人/游戏/等待重连等完整对局流程中为 True, 期间自动触发的查询失败不弹窗打扰
+        self.inMatchFlow = False
         self.isTrayExit = False
         self.tasklistEnabled = True
         self.championSelection = ChampionSelection()
@@ -316,10 +318,11 @@ class MainWindow(FluentWindow):
             #    (生涯页段位等其它数据不受影响, 战绩区保持空白即可)
             return
 
-        if type(obj) is SummonerRankInfoNotFound:
-            if self.isGaming:
-                return
+        # 选人/游戏/等待重连期间, 对局助手等自动触发的查询失败一律静默, 不打扰玩家
+        if self.inMatchFlow:
+            return
 
+        if type(obj) is SummonerRankInfoNotFound:
             msg = self.tr(
                 "The server returned abnormal content, which may be under maintenance.")
         elif type(obj) is RetryMaximumAttempts:
@@ -873,6 +876,8 @@ class MainWindow(FluentWindow):
             await self.__onReconnect()
 
         self.isGaming = isGaming
+        self.inMatchFlow = status in (
+            'ChampSelect', 'GameStart', 'InProgress', 'Reconnect')
 
         if status != 'ChampSelect':
             self.opggWindow.setStaysOnTopEnabled(False)
