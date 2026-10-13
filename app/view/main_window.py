@@ -114,8 +114,6 @@ class MainWindow(FluentWindow):
         self.updateChecker = UpdateChecker(self)
         self.updateChecker.updateAvailable.connect(
             self.__onUpdateAvailable)
-        self.updateChecker.announcementAvailable.connect(
-            self.__onAnnouncementAvailable)
         self.updateChecker.noUpdate.connect(
             lambda: self.__onCheckResult("当前已是最新版本"))
         self.updateChecker.checkFailed.connect(self.__onCheckResult)
@@ -776,37 +774,6 @@ class MainWindow(FluentWindow):
         downloadBtn.setFixedWidth(100)
         downloadBtn.clicked.connect(_onButtonClicked)
         bar.addWidget(downloadBtn)
-
-    def __onAnnouncementAvailable(self, ann_id, title, content, url, password):
-        """收到公告，弹 InfoBar（每个 id 只弹一次，弹窗时立即记录）"""
-        # 立即记录已读 id，下次启动不再弹（直到 id 改变）
-        cfg.set(cfg.lastReadAnnouncementId, ann_id)
-
-        # 密码追加到内容里
-        if password:
-            content = f"{content}\n密码：{password}" if content else f"密码：{password}"
-
-        def _onButtonClicked():
-            if url:
-                import webbrowser
-                webbrowser.open(url)
-
-        # 弹顶部 InfoBar，带可选"查看详情"按钮
-        bar = InfoBar.success(
-            title=title or "公告",
-            content=content or "",
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=-1,  # 不自动关闭
-            parent=self,
-        )
-        if url:
-            from app.common.qfluentwidgets import PushButton
-            detailBtn = PushButton("查看详情")
-            detailBtn.setFixedWidth(100)
-            detailBtn.clicked.connect(_onButtonClicked)
-            bar.addWidget(detailBtn)
 
 
     @asyncSlot(str)

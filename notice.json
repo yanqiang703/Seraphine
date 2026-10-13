@@ -4,13 +4,5 @@
   "content": "Seraphine {latest} 已发布，点击立即下载。",
   "url": "https://my06.lanzoul.com/b00wnxcqgj",
   "password": "123",
-  "enabled": true,
-  "announcement": {
-    "id": "20261014-launch",
-    "enabled": true,
-    "title": "公告",
-    "content": "Seraphine 2.1 已上线，欢迎使用！",
-    "url": "",
-    "password": ""
-  }
+  "enabled": true
 }
