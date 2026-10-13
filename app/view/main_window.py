@@ -36,6 +36,7 @@ from app.common.icons import Icon
 from app.common.config import cfg, VERSION, BETA
 from app.common.logger import logger
 from app.common.signals import signalBus
+from app.common.update_checker import UpdateChecker
 from app.components.message_box import (WaitingForLolMessageBox, ExceptionMessageBox,
                                         ChangeDpiMessageBox)
 from app.lol.exceptions import (SummonerGamesNotFound, RetryMaximumAttempts,
@@ -108,6 +109,12 @@ class MainWindow(FluentWindow):
         self.miniWindow = MiniWindow()
 
         logger.critical("Seraphine initialized", TAG)
+
+        # 推送检查器：启动 5 秒后异步检查更新
+        self.updateChecker = UpdateChecker(self)
+        self.updateChecker.updateAvailable.connect(
+            self.__onUpdateAvailable)
+        QTimer.singleShot(5000, self.__checkUpdate)
 
         self.__silentStart()
 
@@ -706,6 +713,39 @@ class MainWindow(FluentWindow):
             return
 
         QTimer.singleShot(0, self.hide)
+
+    @asyncSlot()
+    async def __checkUpdate(self):
+        """启动后异步检查推送"""
+        await self.updateChecker.check()
+
+    def __onUpdateAvailable(self, title, content, url, password):
+        """收到新版本通知，弹 InfoBar"""
+        # 密码追加到内容里
+        if password:
+            content = f"{content}\n下载密码：{password}"
+
+        def _onButtonClicked():
+            if url:
+                import webbrowser
+                webbrowser.open(url)
+
+        # 弹顶部 InfoBar，带"立即下载"按钮
+        bar = InfoBar.success(
+            title=title,
+            content=content,
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=-1,  # 不自动关闭
+            parent=self,
+        )
+        from app.common.qfluentwidgets import PushButton
+        downloadBtn = PushButton("立即下载")
+        downloadBtn.setFixedWidth(100)
+        downloadBtn.clicked.connect(_onButtonClicked)
+        bar.addWidget(downloadBtn)
+
 
     @asyncSlot(str)
     async def __switchToSearchInterface(self, name):
