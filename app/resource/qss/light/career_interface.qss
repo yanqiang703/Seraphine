@@ -126,3 +126,34 @@ SummonerName[pressed=true] {
     border-radius: 10px;
     background-color: rgba(255, 255, 255, 0.667);
 } */
+/* LeagueAkari 式段位卡片 */
+#rankCard {
+    border: 1px solid rgba(0, 0, 0, 0.095);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.667);
+}
+
+#rankCardQueue {
+    color: rgba(0, 0, 0, 0.62);
+    font: 12px 'Segoe UI', 'Microsoft YaHei';
+}
+
+#rankCardWinRate {
+    color: rgba(0, 0, 0, 0.62);
+    font: 12px 'Segoe UI', 'Microsoft YaHei';
+}
+
+#rankCardTier {
+    color: black;
+    font: bold 16px 'Segoe UI', 'Microsoft YaHei';
+}
+
+#rankCardDetail {
+    color: rgba(0, 0, 0, 0.80);
+    font: 12px 'Segoe UI', 'Microsoft YaHei';
+}
+
+#rankCardHighest {
+    color: rgba(0, 0, 0, 0.50);
+    font: 11px 'Segoe UI', 'Microsoft YaHei';
+}

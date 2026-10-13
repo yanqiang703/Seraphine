@@ -42,6 +42,104 @@ class TagLineLabel(QLabel):
         return super().text().replace(" ", '')
 
 
+class RankCard(QFrame):
+    """LeagueAkari 式段位卡片: 段位图标 + 段位 + 胜负/LP + 赛季最高"""
+
+    def __init__(self, queueLabel, parent=None):
+        super().__init__(parent)
+        self.queueLabel = QLabel(queueLabel)
+        self.winRateLabel = QLabel()
+        self.tierIconLabel = QLabel()
+        self.tierLabel = QLabel("--")
+        self.detailLabel = QLabel("")
+        self.highestLabel = QLabel("")
+
+        self.queueLabel.setObjectName("rankCardQueue")
+        self.winRateLabel.setObjectName("rankCardWinRate")
+        self.tierLabel.setObjectName("rankCardTier")
+        self.detailLabel.setObjectName("rankCardDetail")
+        self.highestLabel.setObjectName("rankCardHighest")
+
+        self.setObjectName("rankCard")
+
+        headerLayout = QHBoxLayout()
+        headerLayout.setContentsMargins(0, 0, 0, 0)
+        headerLayout.addWidget(self.queueLabel)
+        headerLayout.addStretch()
+        headerLayout.addWidget(self.winRateLabel)
+
+        bodyLayout = QHBoxLayout()
+        bodyLayout.setContentsMargins(0, 0, 0, 0)
+        bodyLayout.setSpacing(10)
+        bodyLayout.addWidget(self.tierIconLabel)
+
+        textLayout = QVBoxLayout()
+        textLayout.setContentsMargins(0, 0, 0, 0)
+        textLayout.setSpacing(1)
+        textLayout.addWidget(self.tierLabel)
+        textLayout.addWidget(self.detailLabel)
+        textLayout.addWidget(self.highestLabel)
+        bodyLayout.addLayout(textLayout)
+        bodyLayout.addStretch()
+
+        mainLayout = QVBoxLayout(self)
+        mainLayout.setContentsMargins(12, 9, 12, 10)
+        mainLayout.setSpacing(6)
+        mainLayout.addLayout(headerLayout)
+        mainLayout.addLayout(bodyLayout)
+
+    def setInfo(self, queueInfo):
+        """queueInfo: LCU ranked-stats queueMap 的单队列 dict"""
+        from app.lol.tools import translateTier
+
+        tier = queueInfo.get("tier", "")
+        division = queueInfo.get("division", "NA")
+        wins = queueInfo.get("wins", 0)
+        losses = queueInfo.get("losses", 0)
+        lp = queueInfo.get("leaguePoints", 0)
+        highestTier = queueInfo.get("highestTier", "")
+        highestDivision = queueInfo.get("highestDivision", "NA")
+
+        TIER_ICON_MAP = {
+            "IRON": "iron", "BRONZE": "bronze", "SILVER": "silver",
+            "GOLD": "gold", "PLATINUM": "platinum", "EMERALD": "emerald",
+            "DIAMOND": "diamond", "MASTER": "master",
+            "GRANDMASTER": "grandmaster", "CHALLENGER": "challenger",
+        }
+
+        tierText = translateTier(tier)
+        divisionText = "" if division in ("NA", "") else division
+        if tierText == "--":
+            # 未定级
+            self.tierLabel.setText(self.tr("Unranked"))
+            self.detailLabel.setText("--")
+            self.winRateLabel.setText("")
+            self.tierIconLabel.setPixmap(
+                QPixmap("app/resource/images/unranked.png").scaled(
+                    44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            self.tierLabel.setText(f"{tierText} {divisionText}".strip())
+            self.detailLabel.setText(
+                f"{wins} {self.tr('W')} {losses} {self.tr('L')} {lp} LP")
+            total = wins + losses
+            self.winRateLabel.setText(
+                f"{self.tr('Win Rate')} {wins * 100 // total}%" if total else "")
+            iconName = TIER_ICON_MAP.get(tier.upper(), "unranked")
+            self.tierIconLabel.setPixmap(
+                QPixmap(f"app/resource/images/{iconName}.png").scaled(
+                    44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+        # 赛季最高
+        highestTierText = translateTier(highestTier)
+        if highestTierText == "--":
+            self.highestLabel.setText(f"{self.tr('Highest tier')} --")
+        else:
+            highestDivisionText = "" if highestDivision in (
+                "NA", "") else highestDivision
+            self.highestLabel.setText(
+                f"{self.tr('Highest tier')} {highestTierText} {highestDivisionText}".strip())
+
+
 class CareerInterface(SeraphineInterface):
     gameInfoBarClicked = pyqtSignal(str)
     iconLevelExpChanged = pyqtSignal(dict)
@@ -73,9 +171,18 @@ class CareerInterface(SeraphineInterface):
         self.refreshButton = PushButton(self.tr("Refresh"))
         self.searchButton = PushButton(self.tr("Game history"))
 
+        # Akari 式段位卡片 (单双/灵活并排), 隐藏 9 列段位表格
+        self.rankCardsLayout = QHBoxLayout()
+        self.soloRankCard = RankCard(self.tr("Ranked Solo"))
+        self.flexRankCard = RankCard(self.tr("Ranked Flex"))
+        self.rankCardsLayout.setSpacing(10)
+        self.rankCardsLayout.addWidget(self.soloRankCard, 1)
+        self.rankCardsLayout.addWidget(self.flexRankCard, 1)
+
         self.tableLayout = QHBoxLayout()
         self.rankInfo = None
         self.rankTable = TableWidget(self)
+        self.rankTable.setVisible(False)
 
         self.recentInfoHLayout = QHBoxLayout()
         self.recent20GamesLabel = QLabel(
@@ -235,20 +342,30 @@ class CareerInterface(SeraphineInterface):
         # 33 == self.filterComboBox.height()
         self.recentTeamButton.setFixedHeight(33)
 
-        self.IconNameHBoxLayout.addSpacing(
-            self.backToMeButton.sizeHint().width())
-        self.IconNameHBoxLayout.addItem(
-            QSpacerItem(1, 1, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        # Akari 式头部: 左侧头像/名字/按钮, 右侧段位卡片
+        self.IconNameHBoxLayout.addSpacing(4)
         self.IconNameHBoxLayout.addWidget(self.icon)
-        self.IconNameHBoxLayout.addSpacing(20)
-        self.IconNameHBoxLayout.addLayout(self.nameLevelVLayout)
-        self.IconNameHBoxLayout.addItem(
-            QSpacerItem(1, 1, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        self.IconNameHBoxLayout.addSpacing(16)
 
+        leftVLayout = QVBoxLayout()
+        leftVLayout.setContentsMargins(0, 0, 0, 0)
+        leftVLayout.addSpacerItem(
+            QSpacerItem(1, 12, QSizePolicy.Minimum, QSizePolicy.Fixed))
+        leftVLayout.addLayout(self.nameLevelVLayout)
+        self.buttonsLayout.setSpacing(6)
         self.buttonsLayout.addWidget(self.backToMeButton)
         self.buttonsLayout.addWidget(self.refreshButton)
         self.buttonsLayout.addWidget(self.searchButton)
-        self.IconNameHBoxLayout.addLayout(self.buttonsLayout)
+        buttonsHLayout = QHBoxLayout()
+        buttonsHLayout.setContentsMargins(0, 0, 0, 0)
+        buttonsHLayout.addLayout(self.buttonsLayout)
+        buttonsHLayout.addStretch()
+        leftVLayout.addLayout(buttonsHLayout)
+        leftVLayout.addSpacerItem(
+            QSpacerItem(1, 12, QSizePolicy.Minimum, QSizePolicy.Fixed))
+        self.IconNameHBoxLayout.addLayout(leftVLayout)
+        self.IconNameHBoxLayout.addSpacing(20)
+        self.IconNameHBoxLayout.addLayout(self.rankCardsLayout, 1)
 
         self.gameInfoWidget.setLayout(self.gameInfoLayout)
         self.gameInfoArea.setWidget(self.gameInfoWidget)
@@ -259,7 +376,7 @@ class CareerInterface(SeraphineInterface):
 
         self.vBoxLayout.addLayout(self.IconNameHBoxLayout)
         self.vBoxLayout.addSpacing(20)
-        self.vBoxLayout.addWidget(self.rankTable)
+        # 9 列段位表格已由卡片取代, 不再占用布局
         self.vBoxLayout.addSpacing(5)
         self.vBoxLayout.addLayout(self.recentInfoHLayout)
         self.vBoxLayout.addSpacing(5)
@@ -280,7 +397,8 @@ class CareerInterface(SeraphineInterface):
         self.refreshButton.setVisible(not enable)
         self.backToMeButton.setVisible(not enable)
         self.searchButton.setVisible(not enable)
-        self.rankTable.setVisible(not enable)
+        self.soloRankCard.setVisible(not enable)
+        self.flexRankCard.setVisible(not enable)
         self.recent20GamesLabel.setVisible(not enable)
         self.filterComboBox.setVisible(not enable)
         self.championsCard.setVisible(not enable)
@@ -536,6 +654,16 @@ class CareerInterface(SeraphineInterface):
 
         self.puuid = puuid
 
+        # 段位卡片: 直接用原始 queueMap 数据, 不再走 9 列表格
+        emptyQueue = {"tier": "", "division": "NA", "leaguePoints": 0,
+                      "wins": 0, "losses": 0,
+                      "highestTier": "", "highestDivision": "NA"}
+        queueMap = rankInfo.get('queueMap', {}) if 'queueMap' in rankInfo else {}
+        self.soloRankCard.setInfo(
+            queueMap.get('RANKED_SOLO_5x5', dict(emptyQueue)))
+        self.flexRankCard.setInfo(
+            queueMap.get('RANKED_FLEX_SR', dict(emptyQueue)))
+
         if 'queueMap' in rankInfo:
             self.rankInfo = parseDetailRankInfo(rankInfo)
             self.copyButton.setEnabled(True)
@@ -548,8 +676,6 @@ class CareerInterface(SeraphineInterface):
                 'TFT 排位',
             ]]
             self.copyButton.setEnabled(False)
-
-        self.__updateTable()
 
         if 'gameCount' in games:
             self.recent20GamesLabel.setText(

@@ -132,3 +132,34 @@ SummonerName:hover {
 SummonerName[pressed=true] {
     color: --ThemeColorDark3;
 }
+/* LeagueAkari 式段位卡片 */
+#rankCard {
+    border: 1px solid rgb(35, 35, 35);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.051);
+}
+
+#rankCardQueue {
+    color: rgba(255, 255, 255, 0.62);
+    font: 12px 'Segoe UI', 'Microsoft YaHei';
+}
+
+#rankCardWinRate {
+    color: rgba(255, 255, 255, 0.62);
+    font: 12px 'Segoe UI', 'Microsoft YaHei';
+}
+
+#rankCardTier {
+    color: white;
+    font: bold 16px 'Segoe UI', 'Microsoft YaHei';
+}
+
+#rankCardDetail {
+    color: rgba(255, 255, 255, 0.80);
+    font: 12px 'Segoe UI', 'Microsoft YaHei';
+}
+
+#rankCardHighest {
+    color: rgba(255, 255, 255, 0.50);
+    font: 11px 'Segoe UI', 'Microsoft YaHei';
+}
