@@ -18,8 +18,15 @@ param(
     [Switch]$dbg
 )
 
+# 打包前必须关闭所有运行中的实例，否则旧 dist 无法删除，会产出损坏的包
+if (Get-Process Seraphine, main -ErrorAction SilentlyContinue) {
+    Write-Error "检测到 Seraphine/main 进程正在运行，请先关闭再打包"
+    exit 1
+}
+
 if ($dbg -and (Test-Path .\dist)) {
-    rm -r -Force .\dist
+    # 删除失败（文件被占用等）直接中止，避免新旧文件混合产出损坏的包
+    rm -r -Force .\dist -ErrorAction Stop
 }
 
 # Garante que o PyInstaller resolva as DLLs (libssl/libcrypto) do ambiente
