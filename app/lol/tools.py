@@ -180,7 +180,11 @@ async def parseSummonerData(summoner, rankTask, gameTask):
             "games": [],
         }
         for game in gamesInfo["games"]:
-            info = await parseGameData(game)
+            try:
+                info = await parseGameData(game)
+            except Exception:
+                # 单局解析失败仅跳过该局 (SGP/LCU 数据格式可能有差异)
+                continue
             if time.time() - info["timeStamp"] / 1000 > 60 * 60 * 24 * 365:
                 continue
             if not info["remake"] and info["queueId"] != 0:
@@ -947,6 +951,71 @@ async def parseSingleSummonerGameInfo(item, queueId, currentSummonerId, useSGP=F
         return None
 
 
+def convertSgpGameToLcu(game, puuid):
+    """
+    SGP match-history-query 的 game 转为 LCU 结构, 便于复用 parseGameData:
+    提取 json 字段, 被查玩家提到 participants[0], 平铺字段通过 stats 键自引用
+    """
+    g = game["json"]
+    participants = g.get("participants", [])
+    # python sort 稳定, 被查玩家置首位, 其余保持原顺序
+    participants.sort(key=lambda p: 0 if p.get("puuid") == puuid else 1)
+    for p in participants:
+        p.setdefault("stats", p)
+    return g
+
+
+async def getSummonerGamesCompat(puuid, begIdx, endIdx):
+    """
+    战绩查询兼容入口 (对齐 LeagueAkari): 国服优先 SGP (查别人不受 LCU 限制),
+    失败回退 LCU; 返回与 LCU getSummonerGamesByPuuid 相同的结构
+    """
+    if connector.isInTencent():
+        try:
+            res = await connector.getSummonerGamesByPuuidViaSGP(puuid, begIdx, endIdx)
+            games = [convertSgpGameToLcu(g, puuid)
+                     for g in res.get("games", []) if g.get("json")]
+            return {"games": games, "gameCount": len(games)}
+        except Exception:
+            # SGP 不可用/失败时回退 LCU
+            pass
+
+    return await connector.getSummonerGamesByPuuid(puuid, begIdx, endIdx)
+
+
+def convertSgpRankedStatsToLcu(info):
+    """SGP leagues-ledge rankedStats 转为 LCU ranked-stats 结构, 复用 parseRankInfo"""
+    queueMap = {}
+    for q in info.get("queues", []):
+        queueMap[q.get("queueType", "")] = {
+            "tier": q.get("tier", ""),
+            "division": q.get("rank", "NA"),
+            "leaguePoints": q.get("leaguePoints", ""),
+        }
+
+    # parseRankInfo 直接下标访问这两个队列, 缺失时补空避免 KeyError
+    for queueType in ("RANKED_SOLO_5x5", "RANKED_FLEX_SR"):
+        queueMap.setdefault(
+            queueType, {"tier": "", "division": "NA", "leaguePoints": ""})
+
+    return {"queueMap": queueMap}
+
+
+async def getRankedStatsCompat(puuid):
+    """
+    段位查询兼容入口 (对齐 LeagueAkari): 国服优先 SGP leagues-ledge
+    (查别人不受 LCU /lol-ranked 限制), 失败回退 LCU
+    """
+    if connector.isInTencent():
+        try:
+            res = await connector.getRankedStatsByPuuidViaSGP(puuid)
+            return convertSgpRankedStatsToLcu(res)
+        except Exception:
+            pass
+
+    return await connector.getRankedStatsByPuuid(puuid)
+
+
 async def parseAllyGameInfo(session, currentSummonerId, queueID, useSGP=False):
 
     tasks = [parseSingleSummonerGameInfo(item, queueID, currentSummonerId, useSGP)
@@ -1100,8 +1169,15 @@ def separateTeams(data, currentSummonerId):
 
 
 async def parseGamesDataConcurrently(games):
-    tasks = [parseGameData(game) for game in games]
-    return await asyncio.gather(*tasks)
+    # 单局解析失败仅丢弃该局 (SGP/LCU 数据格式可能有差异), 不影响整页
+    async def _parse(game):
+        try:
+            return await parseGameData(game)
+        except Exception:
+            return None
+
+    results = await asyncio.gather(*[_parse(game) for game in games])
+    return [r for r in results if r is not None]
 
 
 async def parseSummonerGameInfo(item, queueId, currentSummonerId):

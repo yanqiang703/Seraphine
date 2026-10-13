@@ -27,6 +27,7 @@ from app.lol.connector import connector
 from app.lol.tools import (parseGames, parseTftGames, parseSummonerData,
                            getRecentTeammates, parseDetailRankInfo,
                            parseLeagueEntriesToRankInfo,
+                           getSummonerGamesCompat, getRankedStatsCompat,
                            SERVERS_NAME, SERVERS_SUBSET)
 from ..components.seraphine_interface import SeraphineInterface
 
@@ -467,10 +468,10 @@ class CareerInterface(SeraphineInterface):
             return
 
         self.loadGamesTask = asyncio.create_task(
-            connector.getSummonerGamesByPuuid(summoner['puuid'], 0, cfg.get(cfg.careerGamesNumber) - 1))
+            getSummonerGamesCompat(summoner['puuid'], 0, cfg.get(cfg.careerGamesNumber) - 1))
 
         rankTask = asyncio.create_task(
-            connector.getRankedStatsByPuuid(summoner['puuid']))
+            getRankedStatsCompat(summoner['puuid']))
 
         info = await parseSummonerData(summoner, rankTask, self.loadGamesTask)
         await self.repaintInterface(info)

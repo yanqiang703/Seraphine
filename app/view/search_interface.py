@@ -31,7 +31,8 @@ from app.components.color_label import ColorLabel, DeathsLabel
 from app.lol.connector import connector
 from app.lol.exceptions import SummonerGamesNotFound, SummonerNotFound
 from app.lol.tools import (parseGameData, parseGameDetailData,
-                           parseGamesDataConcurrently, ARENA_QUEUE_IDS)
+                           parseGamesDataConcurrently, getSummonerGamesCompat,
+                           ARENA_QUEUE_IDS)
 from ..components.seraphine_interface import SeraphineInterface
 
 
@@ -1250,7 +1251,7 @@ class SearchInterface(SeraphineInterface):
 
             # 先加载两页，让用户看着
             try:
-                games = await connector.getSummonerGamesByPuuid(self.puuid, 0, 19)
+                games = await getSummonerGamesCompat(self.puuid, 0, 19)
             except SummonerGamesNotFound:
                 games = []
             else:
@@ -1345,7 +1346,7 @@ class SearchInterface(SeraphineInterface):
 
             t1 = time.time()
             try:
-                games = await connector.getSummonerGamesByPuuidSlowly(
+                games = await getSummonerGamesCompat(
                     puuid, begIdx, endIdx)
             except SummonerGamesNotFound:
                 # TODO 这里可以弹个窗  -- By Zzaphkiel
