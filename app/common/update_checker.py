@@ -58,10 +58,12 @@ class UpdateChecker(QObject):
                 return
 
             # 新版本更高 → 弹窗
-            title = data.get("title", "发现新版本")
+            title = data.get("title", "发现新版本").replace(
+                "{latest}", latest).replace("{current}", current)
             content = data.get(
                 "content",
-                f"Seraphine {latest} 已发布，点击立即下载。")
+                f"Seraphine {latest} 已发布，点击立即下载。").replace(
+                "{latest}", latest).replace("{current}", current)
             url = data.get("url", "")
             password = data.get("password", "")
 
