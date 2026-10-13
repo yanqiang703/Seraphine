@@ -13,8 +13,8 @@ from app.common.logger import logger
 
 TAG = "UpdateChecker"
 
-# 推送地址（GitHub raw，有 5 分钟缓存）
-NOTICE_URL = "https://raw.githubusercontent.com/yanqiang703/Seraphine/main/notice.json"
+# 推送地址（自己的服务器，无缓存，改完立刻生效）
+NOTICE_URL = "http://154.12.94.96:99/notice.json"
 
 # 请求超时（秒）
 TIMEOUT = 8
@@ -45,7 +45,8 @@ class UpdateChecker(QObject):
                         logger.info(f"Update check: HTTP {resp.status}", TAG)
                         self.checkFailed.emit(f"服务器返回 {resp.status}")
                         return
-                    text = await resp.text()
+                    # 优先用 Content-Type 里的 charset，否则按 utf-8 解码（避免中文乱码）
+                    text = await resp.text(encoding="utf-8")
                     data = json.loads(text)
 
             # 推送开关
