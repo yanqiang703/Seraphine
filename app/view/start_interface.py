@@ -15,7 +15,8 @@ from app.lol.connector import connector
 from app.common.config import cfg
 from app.common.style_sheet import StyleSheet
 from app.common.icons import Icon
-from app.common.util import getTasklistPath, getLolClientPids, getLolClientPidsSlowly
+from app.common.util import (getTasklistPath, getLolClientPids,
+                             getLolClientPidsSlowly, startLolByWeGame)
 from app.common.signals import signalBus
 from app.components.message_box import ChangeClientMessageBox
 
@@ -108,6 +109,14 @@ class StartInterface(SeraphineInterface):
 
     def __onPushButtonClicked(self):
         if self.loading:
+            # WeGame 启动方式：忽略下方路径选择，直接走 WeGameLauncher
+            if cfg.get(cfg.launcherType) == "WeGame":
+                if startLolByWeGame():
+                    self.__showStartLolSuccessInfo()
+                else:
+                    self.__showStartLolByWeGameErrorInfo()
+                return
+
             for clientName in ("client.exe", "LeagueClient.exe"):
                 path = f'{self.pathComboBox.currentText()}/{clientName}'
                 if os.path.exists(path):
@@ -149,6 +158,16 @@ class StartInterface(SeraphineInterface):
                         position=InfoBarPosition.BOTTOM_RIGHT,
                         duration=5000,
                         parent=self)
+
+    def __showStartLolByWeGameErrorInfo(self):
+        InfoBar.error(
+            title="启动失败",
+            content="未找到 WeGameLauncher，请确认英雄联盟为 WeGame 版本",
+            orient=Qt.Vertical,
+            isClosable=True,
+            position=InfoBarPosition.BOTTOM_RIGHT,
+            duration=5000,
+            parent=self)
 
     def __showLolClientPathErrorInfo(self):
         InfoBar.error(

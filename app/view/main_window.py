@@ -29,7 +29,8 @@ from app.view.toolkit_interface import ToolkitInterface
 from app.view.opgg_window import OpggWindow
 from app.view.mini_window import MiniWindow
 from app.common.util import (getLolClientPid, getTasklistPath,
-                             getLolClientPidSlowly, getLoLPathByRegistry)
+                             getLolClientPidSlowly, getLoLPathByRegistry,
+                             startLolByWeGame)
 from app.components.avatar_widget import NavigationAvatarWidget
 from app.components.temp_system_tray_menu import TmpSystemTrayMenu
 from app.common.icons import Icon
@@ -627,15 +628,13 @@ class MainWindow(FluentWindow):
     def __startLolClient(self):
         # 根据启动方式分流
         if cfg.get(cfg.launcherType) == "WeGame":
-            # WeGame 启动：通过 URL scheme（WeGame 会注册 wegame:// 协议，英雄联盟 game_id=26）
-            try:
-                os.startfile("wegame://launch?game_id=26")
+            # WeGame 启动：运行游戏安装目录下的 WeGameLauncher/launcher.exe
+            if startLolByWeGame():
                 self.__showStartLolSuccessInfo()
-            except OSError as e:
-                logger.warning(f"Start via WeGame failed: {e}", TAG)
+            else:
                 InfoBar.error(
                     title="启动失败",
-                    content="未检测到 WeGame，请确认已安装 WeGame 客户端",
+                    content="未找到 WeGameLauncher，请确认英雄联盟为 WeGame 版本",
                     orient=Qt.Vertical,
                     isClosable=True,
                     position=InfoBarPosition.BOTTOM_RIGHT,

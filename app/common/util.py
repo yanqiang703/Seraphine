@@ -45,6 +45,39 @@ def getLoLPathByRegistry() -> str:
     return ""
 
 
+def startLolByWeGame() -> bool:
+    """
+    通过 WeGame 启动英雄联盟客户端
+
+    优先使用注册表 InstallPath 下的 WeGameLauncher/launcher.exe,
+    否则回退到配置的游戏目录(TCLS)的同级 WeGameLauncher 目录
+
+    启动成功返回 True, 未找到启动器返回 False
+    """
+    candidates = []
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            "SOFTWARE\\Tencent\\LOL") as k:
+            installPath, _ = winreg.QueryValueEx(k, "InstallPath")
+            candidates.append(
+                Path(installPath) / "WeGameLauncher" / "launcher.exe")
+    except Exception as e:
+        logger.warning(f"read LOL InstallPath failed: {e}", TAG)
+
+    folders = cfg.get(cfg.lolFolder)
+    if folders:
+        candidates.append(
+            Path(folders[0]).parent / "WeGameLauncher" / "launcher.exe")
+
+    for path in candidates:
+        if path.exists():
+            os.popen(f'"{path}"')
+            return True
+
+    return False
+
+
 def getTasklistPath():
     for path in ['tasklist',
                  'C:/Windows/System32/tasklist.exe']:
