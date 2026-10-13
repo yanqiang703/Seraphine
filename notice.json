@@ -4,5 +4,13 @@
   "content": "Seraphine {latest} 已发布，点击立即下载。",
   "url": "https://my06.lanzoul.com/b00wnxcqgj",
   "password": "123",
-  "enabled": true
+  "enabled": true,
+  "announcement": {
+    "id": "20261013-001",
+    "enabled": false,
+    "title": "公告",
+    "content": "这是一条测试公告内容。",
+    "url": "",
+    "password": ""
+  }
 }

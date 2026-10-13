@@ -237,6 +237,10 @@ class Config(QConfig):
         "2450": [],
     }, QueueFilterValidator())
 
+    # 已读公告 id（用于公告去重，改 notice.json 的 announcement.id 即可重弹）
+    lastReadAnnouncementId = ConfigItem(
+        "Other", "LastReadAnnouncementId", "")
+
 
 VERSION = "2.1"
 BETA = None
