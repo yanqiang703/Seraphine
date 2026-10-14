@@ -75,7 +75,7 @@ class RankCard(QFrame):
 
         textLayout = QVBoxLayout()
         textLayout.setContentsMargins(0, 0, 0, 0)
-        textLayout.setSpacing(1)
+        textLayout.setSpacing(0)
         textLayout.addWidget(self.tierLabel)
         textLayout.addWidget(self.detailLabel)
         textLayout.addWidget(self.highestLabel)
@@ -83,10 +83,11 @@ class RankCard(QFrame):
         bodyLayout.addStretch()
 
         mainLayout = QVBoxLayout(self)
-        mainLayout.setContentsMargins(12, 9, 12, 10)
-        mainLayout.setSpacing(6)
+        mainLayout.setContentsMargins(12, 8, 12, 8)
+        mainLayout.setSpacing(4)
         mainLayout.addLayout(headerLayout)
         mainLayout.addLayout(bodyLayout)
+        self.setFixedHeight(92)
 
     def setInfo(self, queueInfo):
         """queueInfo: LCU ranked-stats queueMap 的单队列 dict"""
@@ -111,7 +112,7 @@ class RankCard(QFrame):
         divisionText = "" if division in ("NA", "") else division
         if tierText == "--":
             # 未定级
-            self.tierLabel.setText(self.tr("Unranked"))
+            self.tierLabel.setText("未定级")
             self.detailLabel.setText("--")
             self.winRateLabel.setText("")
             self.tierIconLabel.setPixmap(
@@ -119,25 +120,24 @@ class RankCard(QFrame):
                     44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
             self.tierLabel.setText(f"{tierText} {divisionText}".strip())
-            self.detailLabel.setText(
-                f"{wins} {self.tr('W')} {losses} {self.tr('L')} {lp} LP")
+            self.detailLabel.setText(f"{wins} 胜 {losses} 负 {lp} LP")
             total = wins + losses
             self.winRateLabel.setText(
-                f"{self.tr('Win Rate')} {wins * 100 // total}%" if total else "")
+                f"胜率 {wins * 100 / total:.1f}%" if total else "")
             iconName = TIER_ICON_MAP.get(tier.upper(), "unranked")
             self.tierIconLabel.setPixmap(
                 QPixmap(f"app/resource/images/{iconName}.png").scaled(
                     44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-        # 赛季最高
+        # 赛季最高 (图标已在右侧段位图标体现, 文字即可)
         highestTierText = translateTier(highestTier)
         if highestTierText == "--":
-            self.highestLabel.setText(f"{self.tr('Highest tier')} --")
+            self.highestLabel.setText("最高 --")
         else:
             highestDivisionText = "" if highestDivision in (
                 "NA", "") else highestDivision
             self.highestLabel.setText(
-                f"{self.tr('Highest tier')} {highestTierText} {highestDivisionText}".strip())
+                f"最高 {highestTierText} {highestDivisionText}".strip())
 
 
 class CareerInterface(SeraphineInterface):
