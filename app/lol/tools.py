@@ -458,14 +458,15 @@ async def parseGameDetailData(puuid, game):
 
                         if queueId in ARENA_QUEUE_IDS and 'CHERRY' in rank:
                             rankInfo = rank["CHERRY"]
-                            lp = rankInfo['ratedRating']
+                            lp = rankInfo.get('ratedRating', 0)
                         else:
-                            rankInfo = rank[
-                                'RANKED_FLEX_SR'] if queueId == 440 else rank['RANKED_SOLO_5x5']
+                            # 玩家可能没打过某队列, 缺省时按未定级处理, 避免 KeyError
+                            queueKey = 'RANKED_FLEX_SR' if queueId == 440 else 'RANKED_SOLO_5x5'
+                            rankInfo = rank.get(queueKey, {})
 
-                            tier = rankInfo['tier']
-                            division = rankInfo['division']
-                            lp = rankInfo['leaguePoints']
+                            tier = rankInfo.get('tier', '')
+                            division = rankInfo.get('division', 'NA')
+                            lp = rankInfo.get('leaguePoints', 0)
 
                             if tier == '':
                                 rankIcon = 'app/resource/images/unranked.png'
@@ -739,8 +740,14 @@ def parseRankInfoFromSGP(info):
 def parseDetailRankInfo(rankInfo):
     pt = ToolsTranslator()
 
+    # 缺队列(如某玩家没打过 TFT)时返回全空, 避免下标访问 KeyError
+    _emptyQueue = {"tier": "", "division": "NA", "leaguePoints": 0,
+                   "wins": 0, "losses": 0,
+                   "highestTier": "", "highestDivision": "NA",
+                   "previousSeasonEndTier": "", "previousSeasonEndDivision": "NA"}
+
     def parseQueue(queueType, label):
-        info = rankInfo['queueMap'][queueType]
+        info = rankInfo.get('queueMap', {}).get(queueType, dict(_emptyQueue))
 
         tier = translateTier(info['tier'])
         division = info['division']
