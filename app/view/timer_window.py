@@ -229,6 +229,9 @@ class TimerWindow(FramelessWindow):
         self.__initWindow()
         self.__connectSignalToSlot()
 
+        # 诊断自检：启动后验证 DDragon 数据/图标下载，结果写入 ERROR 日志（无对局也可触发）
+        QTimer.singleShot(4000, lambda: asyncio.create_task(self.__selfTest()))
+
     def __initWindow(self):
         self.setObjectName("timerWindow")
         self.setWindowTitle("对局计时")
@@ -320,9 +323,29 @@ class TimerWindow(FramelessWindow):
             if enemies:
                 await self.__build(enemies)
         except Exception as e:
-            logger.warning(f"构建计时界面失败: {e}", TAG)
+            logger.error(f"构建计时界面失败: {e}", TAG)
         finally:
             self._polling = False
+
+    async def __selfTest(self):
+        """诊断自检：验证 DDragon 数据与图标下载是否正常。"""
+        try:
+            await liveClient.ensure_data()
+            logger.error(f"[SELFTEST] version={liveClient._version!r} "
+                         f"summonerKeys={len(liveClient._summoner_data.get('data', {}))} "
+                         f"championKeys={len(liveClient._champion_data.get('data', {}))}", TAG)
+            for champ in ("Vex", "Ziggs"):
+                key = liveClient._find_champion_key(champ)
+                full = await liveClient._load_champion_full(champ)
+                spells = (full.get("data") or {}).get(key or champ, {}).get("spells") or []
+                icon = await liveClient.get_ultimate_icon(champ)
+                logger.error(f"[SELFTEST] {champ}: key={key} spells={len(spells)} icon={icon}", TAG)
+            for raw in ("SummonerFlash", "SummonerHeal"):
+                sid = liveClient.get_summoner_id(raw)
+                cd = liveClient.get_summoner_cd(raw)
+                logger.error(f"[SELFTEST] {raw}: id={sid} cd={cd}", TAG)
+        except Exception as e:
+            logger.error(f"[SELFTEST] 异常: {e}", TAG)
 
     async def __build(self, enemies):
         # 已构建过则不再重建，保留进行中的倒计时
@@ -339,10 +362,10 @@ class TimerWindow(FramelessWindow):
             # 英雄头像
             await self.__setAvatar(row, enemy.champion_name)
 
-            # 大招
-            ult_cd = await liveClient.get_ultimate_cd(enemy.champion_name)
+            # 大招（用 DDragon 英文 key 查询）
+            ult_cd = await liveClient.get_ultimate_cd(enemy.champion_key)
             row.ultButton.setCd(ult_cd) if ult_cd else row.ultButton.setCd(0)
-            ult_icon = await liveClient.get_ultimate_icon(enemy.champion_name)
+            ult_icon = await liveClient.get_ultimate_icon(enemy.champion_key)
             row.ultButton.setIcon(ult_icon)
 
             # 召唤师技能

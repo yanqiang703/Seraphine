@@ -57,7 +57,10 @@ cpi .\app -destination .\dist\Seraphine\_internal -recurse
 rm -r .\dist\Seraphine\_internal\app\common
 rm -r .\dist\Seraphine\_internal\app\components
 rm -r .\dist\Seraphine\_internal\app\lol
-rm -Path .\dist\Seraphine\_internal\app\resource\game* -r
+# 删除 LCU 运行时缓存，但保留 liveclient（DDragon 离线数据，对局计时悬浮窗依赖）
+Get-ChildItem -Path ".\dist\Seraphine\_internal\app\resource\game" -Directory |
+    Where-Object { $_.Name -ne "liveclient" } |
+    Remove-Item -Recurse -Force
 rm -r .\dist\Seraphine\_internal\app\resource\i18n\Seraphine.zh_CN.ts
 rm -r .\dist\Seraphine\_internal\app\resource\bin\fix_lcu_window.c
 rm -r .\dist\Seraphine\_internal\app\resource\bin\readme.md

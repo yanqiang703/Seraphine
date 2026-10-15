@@ -9,6 +9,7 @@ DDragon 提供召唤师技能与英雄大招的冷却时间及图标。
 """
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -24,11 +25,13 @@ DDRAGON_VER_URL = "https://ddragon.leagueoflegends.com/api/versions.json"
 DDRAGON_SUMMONER_URL = "https://ddragon.leagueoflegends.com/cdn/{ver}/data/en_US/summoner.json"
 DDRAGON_CHAMPION_URL = "https://ddragon.leagueoflegends.com/cdn/{ver}/data/en_US/champion.json"
 DDRAGON_CHAMPION_FULL_URL = "https://ddragon.leagueoflegends.com/cdn/{ver}/data/en_US/champion/{name}.json"
+DDRAGON_CHAMPION_ZH_URL = "https://ddragon.leagueoflegends.com/cdn/{ver}/data/zh_CN/champion.json"
 DDRAGON_SPELL_ICON_URL = "https://ddragon.leagueoflegends.com/cdn/{ver}/img/spell/{name}"
 
 CACHE_ROOT = "app/resource/game/liveclient"
 SUMMONER_CACHE = os.path.join(CACHE_ROOT, "summoner.json")
 CHAMPION_CACHE = os.path.join(CACHE_ROOT, "champion.json")
+CHAMPION_ZH_CACHE = os.path.join(CACHE_ROOT, "champion_zh.json")
 CHAMPION_FULL_DIR = os.path.join(CACHE_ROOT, "champions")
 SUMMONER_ICON_DIR = os.path.join(CACHE_ROOT, "summoners")
 ULT_ICON_DIR = os.path.join(CACHE_ROOT, "ultimates")
@@ -40,8 +43,9 @@ ULT_LEVEL_INDEX = -1
 @dataclass
 class EnemyInfo:
     """一名敌方玩家的关键信息。"""
-    champion_name: str                       # DDragon / LCU 英雄 key，如 "Ahri"
-    summoner_spells: List[str] = field(default_factory=list)  # rawDisplayName，如 "SummonerFlash"
+    champion_name: str                       # 本地化显示名（用于头像/文字），如 "暗裔剑魔"
+    champion_key: str = ""                   # DDragon 英文 key，如 "Aatrox"
+    summoner_spells: List[str] = field(default_factory=list)  # rawDisplayName
 
 
 class LiveClientDataProvider:
@@ -51,6 +55,7 @@ class LiveClientDataProvider:
         self._session: Optional[aiohttp.ClientSession] = None
         self._summoner_data: Dict = {}
         self._champion_data: Dict = {}
+        self._champion_zh_data: Dict = {}
         self._version: str = ""
 
     # ------------------------------------------------------------------
@@ -109,23 +114,29 @@ class LiveClientDataProvider:
             ]
             spells_list = [s for s in spells_list if s]
 
+            champion_name = p.get("championName") or ""
+            champion_key = self._resolve_champion_key(p)
+
             enemies.append(EnemyInfo(
-                champion_name=self._extract_champion_name(p),
+                champion_name=champion_name or champion_key,
+                champion_key=champion_key,
                 summoner_spells=spells_list,
             ))
 
         return enemies
 
-    @staticmethod
-    def _extract_champion_name(player: Dict) -> str:
-        name = player.get("championName") or player.get("rawChampionName") or ""
-        # rawChampionName 形如 "Gameplay_Champion_Ahri"，取最后一段
-        key = name.split("_")[-1] if "_" in name else name
-        # 去掉常见的装饰前缀
-        for prefix in ("Champion", "Hero"):
-            if key.startswith(prefix) and len(key) > len(prefix):
-                key = key[len(prefix):]
-        return key or "Unknown"
+    def _resolve_champion_key(self, player: Dict) -> str:
+        """解析出 DDragon 使用的英雄英文 key（id）。
+
+        Live Client 的 championName 在中文客户端是本地化名（如 "虚空行者"），
+        而 DDragon 英文数据 key 是内部英文 id，优先用 rawChampionName 还原。
+        """
+        raw = player.get("rawChampionName") or ""
+        if "_" in raw:
+            key = self._find_champion_key(raw.split("_")[-1])
+            if key:
+                return key
+        return self._find_champion_key(player.get("championName") or "") or ""
 
     # ------------------------------------------------------------------
     # DDragon 数据加载（懒加载 + 本地缓存）
@@ -148,6 +159,8 @@ class LiveClientDataProvider:
             SUMMONER_CACHE, DDRAGON_SUMMONER_URL.format(ver=version))
         self._champion_data = await self._load_json(
             CHAMPION_CACHE, DDRAGON_CHAMPION_URL.format(ver=version))
+        self._champion_zh_data = await self._load_json(
+            CHAMPION_ZH_CACHE, DDRAGON_CHAMPION_ZH_URL.format(ver=version))
 
     async def _get_version(self) -> str:
         try:
@@ -156,7 +169,7 @@ class LiveClientDataProvider:
                 if resp.status == 200:
                     return (await resp.json())[0]
         except Exception as e:
-            logger.warning(f"获取 DDragon 版本失败: {e}", TAG)
+            logger.error(f"获取 DDragon 版本失败: {e}", TAG)
         return ""
 
     async def _load_json(self, cache_path: str, url: str) -> Dict:
@@ -171,13 +184,14 @@ class LiveClientDataProvider:
             session = await self.ensure_session()
             async with session.get(url, timeout=8) as resp:
                 if resp.status != 200:
+                    logger.error(f"DDragon 返回非 200 状态码 {resp.status}: {url}", TAG)
                     return {}
                 data = await resp.json()
             with open(cache_path, "w", encoding="utf-8") as f:
                 json.dump(data, f)
             return data
         except Exception as e:
-            logger.warning(f"加载 DDragon 数据失败 {url}: {e}", TAG)
+            logger.error(f"加载 DDragon 数据失败 {url}: {e}", TAG)
             return {}
 
     async def _load_champion_full(self, key: str) -> Dict:
@@ -268,8 +282,11 @@ class LiveClientDataProvider:
                         with open(path, "wb") as f:
                             f.write(await resp.read())
                         return path
+                    logger.error(f"下载图标返回非 200 {resp.status}: {url}", TAG)
             except Exception as e:
-                logger.warning(f"下载图标失败 {url}: {e}", TAG)
+                logger.error(f"下载图标失败 {url}: {e}", TAG)
+        else:
+            logger.error(f"图标名缺失，无法下载: cache={cache_name} img={ddragon_img!r} ver={self._version!r}", TAG)
 
         return "app/resource/images/champion-0.png"
 
@@ -301,17 +318,38 @@ class LiveClientDataProvider:
                     or (info.get("name") or "").lower() == lower
                     or (info.get("id") or "").lower() == lower):
                 return key
+        # 中文等本地化名：用 zh_CN 数据反查英文 key
+        zh = self._champion_zh_data.get("data") or {}
+        for key, info in zh.items():
+            if (info.get("name") or "") == name or key.lower() == lower:
+                return key
         return None
 
     def _find_summoner_key(self, raw_name: str) -> Optional[str]:
         data = self._summoner_data.get("data") or {}
-        if raw_name in data:
-            return raw_name
-        lower = raw_name.lower()
+        name = self._normalize_summoner_name(raw_name)
+        if name in data:
+            return name
+        lower = name.lower()
         for key in data:
             if key.lower() == lower:
                 return key
         return None
+
+    @staticmethod
+    def _normalize_summoner_name(raw_name: str) -> str:
+        """把 Live Client 的 rawDisplayName 还原为 DDragon key。
+
+        中文客户端的 rawDisplayName 形如
+        "GeneratedTip_SummonerSpell_SummonerFlash_DisplayName"，
+        需提取中间的 "SummonerFlash"。
+        """
+        if not raw_name:
+            return ""
+        m = re.search(r"(Summoner[A-Za-z]+)_(?:DisplayName|Description)", raw_name)
+        if m:
+            return m.group(1)
+        return raw_name
 
 
 # 全局单例，供界面层复用
