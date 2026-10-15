@@ -28,6 +28,7 @@ from app.view.auxiliary_interface import AuxiliaryInterface
 from app.view.toolkit_interface import ToolkitInterface
 from app.view.opgg_window import OpggWindow
 from app.view.mini_window import MiniWindow
+from app.view.timer_window import TimerWindow
 from app.common.util import (getLolClientPid, getTasklistPath,
                              getLolClientPidSlowly, getLoLPathByRegistry,
                              startLolByWeGame)
@@ -110,6 +111,7 @@ class MainWindow(FluentWindow):
 
         self.opggWindow = OpggWindow()
         self.miniWindow = MiniWindow()
+        self.timerWindow = TimerWindow()
 
         logger.critical("Seraphine initialized", TAG)
 
@@ -204,6 +206,16 @@ class MainWindow(FluentWindow):
             selectable=False,
             position=pos,
             tooltip="Mini 窗口",
+        )
+
+        self.navigationInterface.addItem(
+            routeKey='Timer',
+            icon=Icon.ARROWREPEAT,
+            text="计时器",
+            onClick=self.showTimerWindow,
+            selectable=False,
+            position=pos,
+            tooltip="对局计时",
         )
 
         self.navigationInterface.insertSeparator(
@@ -383,6 +395,7 @@ class MainWindow(FluentWindow):
         gameInfoAction = Action(Icon.GAME, self.tr("Game Information"), self)
         auxiliaryAction = Action(
             Icon.WRENCH, self.tr("Auxiliary Functions"), self)
+        timerAction = Action(Icon.ARROWREPEAT, self.tr("对局计时"), self)
         settingsAction = Action(Icon.SETTING, self.tr("Settings"), self)
         quitAction = Action(Icon.EXIT, self.tr('Quit'), self)
 
@@ -404,6 +417,7 @@ class MainWindow(FluentWindow):
             lambda: showAndSwitch(self.auxiliaryFuncInterface))
         settingsAction.triggered.connect(
             lambda: showAndSwitch(self.settingInterface))
+        timerAction.triggered.connect(self.showTimerWindow)
         quitAction.triggered.connect(quit)
 
         self.trayMenu = TmpSystemTrayMenu(self)
@@ -412,6 +426,7 @@ class MainWindow(FluentWindow):
         self.trayMenu.addAction(searchAction)
         self.trayMenu.addAction(gameInfoAction)
         self.trayMenu.addAction(auxiliaryAction)
+        self.trayMenu.addAction(timerAction)
         self.trayMenu.addSeparator()
         self.trayMenu.addAction(settingsAction)
         self.trayMenu.addAction(quitAction)
@@ -726,6 +741,7 @@ class MainWindow(FluentWindow):
             self.__terminateListeners()
             self.opggWindow.close()
             self.miniWindow.close()
+            self.timerWindow.close()
 
             cfg.set(cfg.windowSize, self.windowSize)
 
@@ -1069,6 +1085,9 @@ class MainWindow(FluentWindow):
 
     def showMiniWindow(self):
         self.miniWindow.showWindow()
+
+    def showTimerWindow(self):
+        self.timerWindow.showWindow()
 
     @asyncSlot()
     async def __refreshCareerInterface(self):

@@ -210,6 +210,11 @@ class Config(QConfig):
     miniWindowOnTop = ConfigItem(
         "General", "MiniWindowOnTop", True, BoolValidator())
 
+    enableTimerWindow = ConfigItem(
+        "General", "EnableTimerWindow", True, BoolValidator())
+    timerWindowOnTop = ConfigItem(
+        "General", "TimerWindowOnTop", True, BoolValidator())
+
     windowSize = ConfigItem("Personalization", "WindowSize", QSize(
         1134, 826), None, QSizeSerializer())
 
