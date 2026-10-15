@@ -247,7 +247,7 @@ class Config(QConfig):
     }, QueueFilterValidator())
 
 
-VERSION = "2.2"
+VERSION = "2.3"
 BETA = None
 LOCAL_PATH = f"{os.getenv('APPDATA')}\\Seraphine"
 
