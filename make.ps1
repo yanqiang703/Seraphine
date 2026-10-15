@@ -43,8 +43,8 @@ $env:PATH = "$envRoot;$envRoot\Library\bin;$envRoot\Scripts;$env:PATH"
 
 # Usa o layout padrao do PyInstaller 6 (tudo dentro de `_internal`, deixando
 # so o Seraphine.exe visivel na raiz da pasta) -- By Claude
-# 默认普通用户权限运行, 不弹 UAC; 需要管理员时手动右键"以管理员身份运行"
-python -m PyInstaller -w -i .\app\resource\images\logo.ico main.py
+# --uac-admin: 嵌入 manifest 请求管理员权限, 双击即自动提权
+python -m PyInstaller -w --uac-admin -i .\app\resource\images\logo.ico main.py
 rm -r -fo .\build
 rm -r -fo .\main.spec
 rni -path .\dist\main -newName Seraphine
