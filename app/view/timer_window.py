@@ -340,7 +340,7 @@ class TimerWindow(FramelessWindow):
             await self.__setAvatar(row, enemy.champion_name)
 
             # 大招
-            ult_cd = liveClient.get_ultimate_cd(enemy.champion_name)
+            ult_cd = await liveClient.get_ultimate_cd(enemy.champion_name)
             row.ultButton.setCd(ult_cd) if ult_cd else row.ultButton.setCd(0)
             ult_icon = await liveClient.get_ultimate_icon(enemy.champion_name)
             row.ultButton.setIcon(ult_icon)
@@ -351,8 +351,7 @@ class TimerWindow(FramelessWindow):
                     raw = enemy.summoner_spells[i]
                     cd = liveClient.get_summoner_cd(raw)
                     row.spellButtons[i].setCd(cd or 0)
-                    icon = await liveClient.get_summoner_icon(raw)
-                    row.spellButtons[i].setIcon(icon)
+                    row.spellButtons[i].setIcon(await self.__getSummonerIcon(raw))
                 else:
                     row.spellButtons[i].setIcon(None)
 
@@ -369,6 +368,16 @@ class TimerWindow(FramelessWindow):
             row.avatar.setIcon(path)
         except Exception:
             row.avatar.setIcon("app/resource/images/champion-0.png")
+
+    async def __getSummonerIcon(self, raw_name: str) -> str:
+        """召唤师技能图标：优先走 LCU 本地缓存，失败再回退 DDragon。"""
+        spell_id = liveClient.get_summoner_id(raw_name)
+        if spell_id is not None:
+            try:
+                return await connector.getSummonerSpellIcon(spell_id)
+            except Exception:
+                pass
+        return await liveClient.get_summoner_icon(raw_name)
 
     def __adjustSize(self):
         count = max(len(self._enemyRows), 1)

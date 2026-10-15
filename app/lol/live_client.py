@@ -23,11 +23,13 @@ LIVE_CLIENT_URL = "https://127.0.0.1:2999/liveclientdata/allgamedata"
 DDRAGON_VER_URL = "https://ddragon.leagueoflegends.com/api/versions.json"
 DDRAGON_SUMMONER_URL = "https://ddragon.leagueoflegends.com/cdn/{ver}/data/en_US/summoner.json"
 DDRAGON_CHAMPION_URL = "https://ddragon.leagueoflegends.com/cdn/{ver}/data/en_US/champion.json"
+DDRAGON_CHAMPION_FULL_URL = "https://ddragon.leagueoflegends.com/cdn/{ver}/data/en_US/champion/{name}.json"
 DDRAGON_SPELL_ICON_URL = "https://ddragon.leagueoflegends.com/cdn/{ver}/img/spell/{name}"
 
 CACHE_ROOT = "app/resource/game/liveclient"
 SUMMONER_CACHE = os.path.join(CACHE_ROOT, "summoner.json")
 CHAMPION_CACHE = os.path.join(CACHE_ROOT, "champion.json")
+CHAMPION_FULL_DIR = os.path.join(CACHE_ROOT, "champions")
 SUMMONER_ICON_DIR = os.path.join(CACHE_ROOT, "summoners")
 ULT_ICON_DIR = os.path.join(CACHE_ROOT, "ultimates")
 
@@ -133,6 +135,7 @@ class LiveClientDataProvider:
         if self._champion_data and self._summoner_data:
             return
 
+        os.makedirs(CHAMPION_FULL_DIR, exist_ok=True)
         os.makedirs(SUMMONER_ICON_DIR, exist_ok=True)
         os.makedirs(ULT_ICON_DIR, exist_ok=True)
 
@@ -177,17 +180,34 @@ class LiveClientDataProvider:
             logger.warning(f"加载 DDragon 数据失败 {url}: {e}", TAG)
             return {}
 
+    async def _load_champion_full(self, key: str) -> Dict:
+        """加载单个英雄的完整数据（champion/{key}.json），含 spells 数组。"""
+        if not key or not self._version:
+            return {}
+        path = os.path.join(CHAMPION_FULL_DIR, f"{key}.json")
+        return await self._load_json(
+            path, DDRAGON_CHAMPION_FULL_URL.format(ver=self._version, name=key))
+
+    async def _get_ultimate_spell(self, champion_name: str) -> Optional[Dict]:
+        """返回大招(R)的 spell 数据（spells[3]）。"""
+        key = self._find_champion_key(champion_name)
+        if not key:
+            return None
+        info = await self._load_champion_full(key)
+        champion = (info.get("data") or {}).get(key) or {}
+        spells = champion.get("spells") or []
+        if len(spells) < 4:
+            return None
+        return spells[3]
+
     # ------------------------------------------------------------------
     # 冷却时间
     # ------------------------------------------------------------------
-    def get_ultimate_cd(self, champion_name: str) -> Optional[int]:
-        info = self._find_champion(champion_name)
-        if not info:
+    async def get_ultimate_cd(self, champion_name: str) -> Optional[int]:
+        spell = await self._get_ultimate_spell(champion_name)
+        if not spell:
             return None
-        spells = info.get("spells") or []
-        if len(spells) < 4:
-            return None
-        cooldowns = spells[3].get("cooldown") or []
+        cooldowns = spell.get("cooldown") or []
         if not cooldowns:
             return None
         idx = ULT_LEVEL_INDEX if abs(ULT_LEVEL_INDEX) <= len(cooldowns) else 0
@@ -200,19 +220,28 @@ class LiveClientDataProvider:
         cooldowns = self._summoner_data.get("data", {}).get(key, {}).get("cooldown") or []
         return int(cooldowns[0]) if cooldowns else None
 
+    def get_summoner_id(self, raw_name: str) -> Optional[int]:
+        """返回召唤师技能的数字 id（LCU 图标缓存命名用的 key）。"""
+        key = self._find_summoner_key(raw_name)
+        if not key:
+            return None
+        entry = self._summoner_data.get("data", {}).get(key, {})
+        try:
+            return int(entry.get("key"))
+        except (TypeError, ValueError):
+            return None
+
     # ------------------------------------------------------------------
     # 图标
     # ------------------------------------------------------------------
     async def get_ultimate_icon(self, champion_name: str) -> str:
-        info = self._find_champion(champion_name)
+        key = self._find_champion_key(champion_name) or champion_name
+        spell = await self._get_ultimate_spell(champion_name)
         img_name = ""
-        if info:
-            spells = info.get("spells") or []
-            if len(spells) >= 4:
-                img_name = (spells[3].get("image") or {}).get("full", "")
+        if spell:
+            img_name = (spell.get("image") or {}).get("full", "")
 
-        return await self._download_icon(
-            ULT_ICON_DIR, champion_name, img_name)
+        return await self._download_icon(ULT_ICON_DIR, key, img_name)
 
     async def get_summoner_icon(self, raw_name: str) -> str:
         key = self._find_summoner_key(raw_name)
@@ -257,6 +286,21 @@ class LiveClientDataProvider:
         for key, info in champions.items():
             if key.lower() == lower:
                 return info
+        return None
+
+    def _find_champion_key(self, name: str) -> Optional[str]:
+        """返回 champion.json 中的英雄 key（即 DDragon 完整数据 URL 所用的 id）。"""
+        champions = self._champion_data.get("data") or {}
+        if not name:
+            return None
+        if name in champions:
+            return name
+        lower = name.lower()
+        for key, info in champions.items():
+            if (key.lower() == lower
+                    or (info.get("name") or "").lower() == lower
+                    or (info.get("id") or "").lower() == lower):
+                return key
         return None
 
     def _find_summoner_key(self, raw_name: str) -> Optional[str]:
