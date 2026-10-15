@@ -10,7 +10,7 @@ from qasync import asyncSlot
 from qframelesswindow.titlebar.title_bar_buttons import MaximizeButton
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt5.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
-from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget, QInputDialog)
+from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget, QInputDialog, QMessageBox)
 
 from app.common.config import cfg
 from app.common.logger import logger
@@ -179,11 +179,14 @@ class TimerTitleBar(QFrame):
         self.titleLabel = QLabel("对局计时")
         self.titleLabel.setObjectName("TimerTitleLabel")
 
+        self.helpButton = TransparentToolButton(FluentIcon.HELP)
         self.pinButton = TransparentToolButton(FluentIcon.PIN)
         self.closeButton = TransparentToolButton(FluentIcon.CLOSE)
 
-        for btn in (self.pinButton, self.closeButton):
+        for btn in (self.helpButton, self.pinButton, self.closeButton):
             btn.setFixedSize(30, 30)
+
+        self.helpButton.setToolTip("使用说明")
 
         self.pinButton.setCheckable(True)
         self.pinButton.setChecked(cfg.get(cfg.timerWindowOnTop))
@@ -198,6 +201,7 @@ class TimerTitleBar(QFrame):
         self.hBoxLayout.setSpacing(2)
         self.hBoxLayout.addWidget(self.titleLabel)
         self.hBoxLayout.addStretch(1)
+        self.hBoxLayout.addWidget(self.helpButton)
         self.hBoxLayout.addWidget(self.pinButton)
         self.hBoxLayout.addWidget(self.closeButton)
 
@@ -287,6 +291,7 @@ class TimerWindow(FramelessWindow):
     def __connectSignalToSlot(self):
         self.titleBar.closeButton.clicked.connect(self.hide)
         self.titleBar.pinButton.toggled.connect(self.__onPinToggled)
+        self.titleBar.helpButton.clicked.connect(self.__showHelp)
         signalBus.gameStatusChanged.connect(self.__onGameStatusChanged)
         signalBus.lolClientEnded.connect(self.__onLolClientEnded)
 
@@ -453,3 +458,16 @@ class TimerWindow(FramelessWindow):
         self.show()
         self.raise_()
         self.activateWindow()
+
+    def __showHelp(self):
+        QMessageBox.information(
+            self, "对局计时 · 使用说明",
+            "· 左键点击技能图标：开始冷却倒计时\n"
+            "· 右键点击技能图标：重置（取消倒计时）\n"
+            "· 双击技能图标：手动编辑冷却秒数（填 0 清除）\n"
+            "· 图钉按钮：窗口置顶\n"
+            "· × 按钮：隐藏窗口\n\n"
+            "说明：\n"
+            "敌方英雄与召唤师技能在对局中自动识别显示。\n"
+            "冷却时长取自官方数据（满级大招 / 召唤师技能基础值）。\n"
+            "倒计时为本地计时，从点击图标那一刻开始，不读取游戏内实时冷却。")
