@@ -10,7 +10,7 @@ from qasync import asyncSlot
 from qframelesswindow.titlebar.title_bar_buttons import MaximizeButton
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt5.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
-from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget)
+from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget, QInputDialog)
 
 from app.common.config import cfg
 from app.common.logger import logger
@@ -36,6 +36,7 @@ class SkillTimerButton(QFrame):
         super().__init__(parent)
         self.setFixedSize(ICON_SIZE, ICON_SIZE)
         self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("左键：开始倒计时\n右键：重置\n双击：编辑冷却秒数")
 
         self.image = None  # QPixmap
         self.cd = None     # 冷却秒数
@@ -87,6 +88,22 @@ class SkillTimerButton(QFrame):
             if self._active:
                 self.reset()
         return super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.editCd()
+        return super().mouseDoubleClickEvent(event)
+
+    def editCd(self):
+        """双击弹出输入框，手动设置冷却秒数并开始倒计时。"""
+        cur = self.cd or 0
+        value, ok = QInputDialog.getInt(
+            self, "编辑冷却", "冷却秒数（0 表示清除）:", cur, 0, 999, 1)
+        if ok:
+            if value <= 0:
+                self.reset()
+            else:
+                self.start(value)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -236,6 +253,7 @@ class TimerWindow(FramelessWindow):
         self.setObjectName("timerWindow")
         self.setWindowTitle("对局计时")
         self.setWindowIcon(QIcon("app/resource/images/logo.png"))
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.resize(240, 60)
 
         if cfg.get(cfg.timerWindowOnTop):
@@ -275,7 +293,7 @@ class TimerWindow(FramelessWindow):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#202020"))
+        painter.setBrush(QColor(32, 32, 32, 180))
         painter.drawRect(self.rect())
 
     def closeEvent(self, event):
