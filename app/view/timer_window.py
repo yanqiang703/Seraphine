@@ -18,11 +18,12 @@ from app.common.qfluentwidgets import (FluentIcon, FramelessWindow, TransparentT
 from app.common.signals import signalBus
 from app.components.champion_icon_widget import RoundIcon
 from app.lol.connector import connector
-from app.lol.live_client import liveClient
+from app.lol.live_client import UMBRAL_GLAIVE_ID, liveClient
 
 TAG = "TimerWindow"
 
 ICON_SIZE = 40
+SELF_STATUS_HEIGHT = 28  # 顶部自身装备提示行高度
 POLL_INTERVAL = 2000  # 轮询间隔（毫秒）
 
 # 对局进行中的 gameflow 阶段
@@ -223,8 +224,27 @@ class TimerWindow(FramelessWindow):
         self._built = False
         self._polling = False
         self._enemyRows = []
+        self._itemPolling = False
+        self._hasUmbralGlaive = False
 
         self.setTitleBar(TimerTitleBar(self))
+
+        # 自身装备状态提示（仅检测黯影阔剑）
+        self.selfStatusWidget = QWidget()
+        self.selfStatusWidget.setFixedHeight(SELF_STATUS_HEIGHT)
+        self.selfStatusIcon = QLabel()
+        self.selfStatusIcon.setFixedSize(24, 24)
+        self.selfStatusIcon.setScaledContents(True)
+        self.selfStatusText = QLabel("黯影阔剑 · 视野侦测已激活")
+        self.selfStatusText.setObjectName("timerItemStatus")
+        self.selfStatusLayout = QHBoxLayout(self.selfStatusWidget)
+        self.selfStatusLayout.setContentsMargins(10, 0, 10, 4)
+        self.selfStatusLayout.setSpacing(6)
+        self.selfStatusLayout.addStretch(1)
+        self.selfStatusLayout.addWidget(self.selfStatusIcon)
+        self.selfStatusLayout.addWidget(self.selfStatusText)
+        self.selfStatusLayout.addStretch(1)
+        self.selfStatusWidget.hide()
 
         self.contentLabel = QLabel("等待对局开始…")
         self.contentLabel.setObjectName("TimerHintLabel")
@@ -239,6 +259,7 @@ class TimerWindow(FramelessWindow):
         self.stackedOuter.setContentsMargins(0, 0, 0, 0)
         self.stackedOuter.setSpacing(0)
         self.stackedOuter.addWidget(self.titleBar)
+        self.stackedOuter.addWidget(self.selfStatusWidget)
         self.stackedOuter.addWidget(self.contentLabel)
         self.stackedOuter.addWidget(self.enemiesWidget)
         self.stackedOuter.addStretch(1)
@@ -278,6 +299,10 @@ class TimerWindow(FramelessWindow):
             #timerChampName {
                 color: #d7d7d7;
                 font: 500 11px 'Microsoft YaHei', 'Segoe UI';
+            }
+            #timerItemStatus {
+                color: #7ee08c;
+                font: 600 11px 'Microsoft YaHei', 'Segoe UI';
             }
             QToolButton {
                 border-radius: 6px;
@@ -331,10 +356,46 @@ class TimerWindow(FramelessWindow):
     def __onPoll(self):
         if not self.isVisible():
             return
-        if self._polling:
-            return
         if not self._built:
-            asyncio.create_task(self.__tryBuild())
+            if not self._polling:
+                asyncio.create_task(self.__tryBuild())
+            return
+        asyncio.create_task(self.__refreshItemStatus())
+
+    async def __refreshItemStatus(self):
+        """检测自己是否装备黯影阔剑，并更新窗口顶部状态提示。"""
+        if self._itemPolling:
+            return
+        self._itemPolling = True
+        try:
+            items = await liveClient.fetch_my_items()
+            if items is None:
+                return
+            await self.__setItemStatus(liveClient.has_umbral_glaive(items))
+        except Exception as e:
+            logger.error(f"检测自身装备失败: {e}", TAG)
+        finally:
+            self._itemPolling = False
+
+    async def __setItemStatus(self, has_item: bool):
+        if has_item == self._hasUmbralGlaive:
+            return
+        self._hasUmbralGlaive = has_item
+
+        if not has_item:
+            self.selfStatusWidget.hide()
+            self.__adjustSize()
+            return
+
+        self.selfStatusIcon.setPixmap(QPixmap(await self.__getItemIcon(UMBRAL_GLAIVE_ID)))
+        self.selfStatusWidget.show()
+        self.__adjustSize()
+
+    async def __getItemIcon(self, item_id: int) -> str:
+        try:
+            return await connector.getItemIcon(item_id)
+        except Exception:
+            return "app/resource/images/item-0.png"
 
     async def __tryBuild(self):
         if self._built or self._polling:
@@ -367,6 +428,9 @@ class TimerWindow(FramelessWindow):
                 sid = liveClient.get_summoner_id(raw)
                 cd = liveClient.get_summoner_cd(raw)
                 logger.error(f"[SELFTEST] {raw}: id={sid} cd={cd}", TAG)
+            items = await liveClient.fetch_my_items()
+            has = liveClient.has_umbral_glaive(items) if items is not None else None
+            logger.error(f"[SELFTEST] myItems={items} umbralGlaive={has}", TAG)
         except Exception as e:
             logger.error(f"[SELFTEST] 异常: {e}", TAG)
 
@@ -427,12 +491,15 @@ class TimerWindow(FramelessWindow):
 
     def __adjustSize(self):
         count = max(len(self._enemyRows), 1)
-        height = self.titleBar.height() + count * (ICON_SIZE + 36)
+        extra = SELF_STATUS_HEIGHT if self._hasUmbralGlaive else 0
+        height = self.titleBar.height() + extra + count * (ICON_SIZE + 36)
         self.resize(240, height)
 
     def __reset(self):
         self._built = False
         self._polling = False
+        self._hasUmbralGlaive = False
+        self.selfStatusWidget.hide()
         for row in self._enemyRows:
             row.setParent(None)
             row.deleteLater()
@@ -470,4 +537,6 @@ class TimerWindow(FramelessWindow):
             "说明：\n"
             "敌方英雄与召唤师技能在对局中自动识别显示。\n"
             "冷却时长取自官方数据（满级大招 / 召唤师技能基础值）。\n"
-            "倒计时为本地计时，从点击图标那一刻开始，不读取游戏内实时冷却。")
+            "倒计时为本地计时，从点击图标那一刻开始，不读取游戏内实时冷却。\n\n"
+            "装备检测：\n"
+            "仅检测自己——装备黯影阔剑时，窗口顶部出现绿色提示。")

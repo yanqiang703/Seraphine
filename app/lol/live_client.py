@@ -39,6 +39,10 @@ ULT_ICON_DIR = os.path.join(CACHE_ROOT, "ultimates")
 # 大招(R)冷却默认取满级（cooldown 数组末位）
 ULT_LEVEL_INDEX = -1
 
+# 黯影阔剑（Umbral Glaive）：被动「幽影」可侦测并摧毁附近敌方守卫
+UMBRAL_GLAIVE_ID = 3179
+UMBRAL_GLAIVE_NAMES = ("Umbral Glaive", "黯影阔剑")
+
 
 @dataclass
 class EnemyInfo:
@@ -124,6 +128,46 @@ class LiveClientDataProvider:
             ))
 
         return enemies
+
+    async def fetch_my_items(self) -> Optional[List[Dict]]:
+        """返回当前玩家（activePlayer）本局的装备列表。
+
+        不在对局中（连接失败或客户端未返回数据）时返回 None。
+        items 元素含 itemID / displayName / rawDisplayName 等字段。
+        """
+        try:
+            session = await self.ensure_session()
+            async with session.get(LIVE_CLIENT_URL, timeout=1.5) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+        except Exception:
+            return None
+
+        if not data:
+            return None
+
+        my_name = (data.get("activePlayer") or {}).get("summonerName")
+        for player in data.get("allPlayers") or []:
+            if my_name and player.get("summonerName") == my_name:
+                return player.get("items") or []
+        return []
+
+    @staticmethod
+    def has_umbral_glaive(items: Optional[List[Dict]]) -> bool:
+        """判断装备中是否含黯影阔剑。
+
+        以 itemID 匹配为主，名称匹配用于兼容 ID 变化（如奥恩强化版）的情况。
+        """
+        for item in items or []:
+            if item.get("itemID") == UMBRAL_GLAIVE_ID:
+                return True
+            name = (item.get("displayName") or "").lower()
+            raw = (item.get("rawDisplayName") or "").lower()
+            if any(n.lower() in name or n.lower() in raw
+                   for n in UMBRAL_GLAIVE_NAMES):
+                return True
+        return False
 
     def _resolve_champion_key(self, player: Dict) -> str:
         """解析出 DDragon 使用的英雄英文 key（id）。
