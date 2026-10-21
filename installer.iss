@@ -1,13 +1,13 @@
 [Setup]
 AppName=Seraphine
-AppVersion=2.3
+AppVersion=2.4
 AppPublisher=Seraphine
 DefaultDirName={autopf}\Seraphine
 DefaultGroupName=Seraphine
 UninstallDisplayIcon={app}\Seraphine.exe
 UninstallDisplayName=Seraphine
 OutputDir=installer_output
-OutputBaseFilename=SeraphineSetup_2.3
+OutputBaseFilename=SeraphineSetup_2.4
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
@@ -23,7 +23,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "startmenu"; Description: "创建开始菜单快捷方式"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "dist\main\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\Seraphine\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Seraphine"; Filename: "{app}\Seraphine.exe"; IconFilename: "{app}\Seraphine.exe"; Tasks: startmenu
