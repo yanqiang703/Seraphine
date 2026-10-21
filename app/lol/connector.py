@@ -24,6 +24,10 @@ requests.packages.urllib3.disable_warnings()
 
 TAG = "Connector"
 
+# SGP 单次请求超时（秒）。高峰期艾欧尼亚/黑色玫瑰的 SGP 会明显变慢，
+# 不设超时会让界面一直转圈，设太短又会误判失败
+SGP_TIMEOUT = 8
+
 
 class PastRequest:
     def __init__(self, func: str, params_dict, kwargs):
@@ -1320,8 +1324,42 @@ class LolClientConnector(QObject):
             'count': endIdx - begIdx + 1,
         }
 
-        res = await self.__sgp__get(url, params)
-        return await res.json()
+        # 晚间高峰 (艾欧尼亚/黑色玫瑰) SGP 常见 429/5xx/超时, 短暂退避重试可恢复;
+        # 三次都失败才向上抛, 由调用方回退 LCU 或留空
+        lastError = None
+        for attempt in range(3):
+            if attempt:
+                await asyncio.sleep(0.4 * attempt)
+
+            try:
+                res = await self.__sgp__get(url, params)
+                status = res.status
+                if status != 200:
+                    res.release()
+                    lastError = f"HTTP {status}"
+                    logger.error(
+                        f"SGP match history HTTP {status}, "
+                        f"puuid={puuid}, attempt={attempt + 1}", TAG)
+                    continue
+
+                data = await res.json()
+            except Exception as e:
+                lastError = repr(e)
+                logger.error(
+                    f"SGP match history request failed, puuid={puuid}, "
+                    f"attempt={attempt + 1}: {e!r}", TAG)
+                continue
+
+            if not isinstance(data.get("games"), list):
+                lastError = f"invalid payload: {str(data)[:200]}"
+                logger.error(
+                    f"SGP match history invalid payload, puuid={puuid}: "
+                    f"{str(data)[:200]}", TAG)
+                continue
+
+            return data
+
+        raise RuntimeError(f"SGP match history unavailable: {lastError}")
 
     async def getSummonerGamingInfoByPuuidViaSgp(self, puuid):
         logger.debug(
@@ -1387,8 +1425,20 @@ class LolClientConnector(QObject):
         headers = {
             "Authorization": f"Bearer {self.sgpToken}"
         }
+        timeout = aiohttp.ClientTimeout(total=SGP_TIMEOUT)
 
-        return await self.sgpSess.get(path, params=params, ssl=False, headers=headers)
+        res = await self.sgpSess.get(
+            path, params=params, ssl=False, headers=headers, timeout=timeout)
+
+        if res.status == 401:
+            # sgpToken 过期（客户端长时间运行/令牌轮换）: 刷新后重试一次
+            res.release()
+            self.sgpToken = await self.getSGPtoken()
+            headers["Authorization"] = f"Bearer {self.sgpToken}"
+            res = await self.sgpSess.get(
+                path, params=params, ssl=False, headers=headers, timeout=timeout)
+
+        return res
 
     def getLoginSummonerByPid(self, pid):
         port, token, _ = getPortTokenServerByPid(pid)

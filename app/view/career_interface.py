@@ -699,6 +699,14 @@ class CareerInterface(SeraphineInterface):
             self.lossesLabel.setText(f"{self.tr('Losses:')} 0")
             self.kdaLabel.setText(
                 f"{self.tr('KDA:')} 0 / 0 / 0 " + self.tr("(") + "0" + self.tr(")"))
+            # games 为空表示 SGP/LCU 都查询失败, 明确告知原因而不是只显示 "None 场"
+            InfoBar.warning(
+                "战绩获取失败",
+                "服务器繁忙或网络波动（高峰期常见），请稍后点击「刷新」重试。",
+                orient=Qt.Vertical,
+                position=InfoBarPosition.BOTTOM_RIGHT,
+                duration=5000,
+                parent=self.window())
 
         self.games = games
 

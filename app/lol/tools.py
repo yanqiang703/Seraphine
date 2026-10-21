@@ -8,8 +8,12 @@ from PyQt5.QtCore import QObject, QLocale
 
 from .exceptions import SummonerRankInfoNotFound
 from ..common.config import cfg, Language
+from ..common.logger import logger
 from ..lol.connector import connector
 from ..common.signals import signalBus
+
+
+TAG = "Tools"
 
 
 SERVERS_NAME = {
@@ -166,7 +170,11 @@ async def parseSummonerData(summoner, rankTask, gameTask):
 
     try:
         gamesInfo = await gameTask
-    except:
+    except BaseException as e:
+        # SGP 与 LCU 都失败时才会有该分支; 记录原因便于排查"查不到战绩"
+        logger.error(
+            f"parseSummonerData: 战绩获取失败, puuid={summoner['puuid']}: {e!r}",
+            TAG)
         champions = []
         games = {}
     else:
@@ -948,9 +956,11 @@ async def parseSingleSummonerGameInfo(item, queueId, currentSummonerId, useSGP=F
     if useSGP and connector.isInTencent():
         try:
             return await getSummonerGamesInfoViaSGP(item, queueId, currentSummonerId)
-        except Exception:
-            # 仅该玩家回退 LCU, 不拖累整队
-            pass
+        except Exception as e:
+            # 仅该玩家回退 LCU, 不拖累整队; 记录原因便于排查
+            logger.error(
+                f"parseSingleSummonerGameInfo: SGP 失败, 回退 LCU, "
+                f"puuid={item.get('puuid')}: {e!r}", TAG)
 
     try:
         return await parseSummonerGameInfo(item, queueId, currentSummonerId)
@@ -992,9 +1002,11 @@ async def getSummonerGamesCompat(puuid, begIdx, endIdx):
             games = [convertSgpGameToLcu(g, puuid)
                      for g in res.get("games", []) if g.get("json")]
             return {"games": games, "gameCount": len(games)}
-        except Exception:
-            # SGP 不可用/失败时回退 LCU
-            pass
+        except Exception as e:
+            # SGP 不可用/失败时回退 LCU; 记录原因, 否则高峰期查询失败无从排查
+            logger.error(
+                f"getSummonerGamesCompat: SGP 查询失败, 回退 LCU, "
+                f"puuid={puuid}: {e!r}", TAG)
 
     return await connector.getSummonerGamesByPuuid(puuid, begIdx, endIdx)
 
