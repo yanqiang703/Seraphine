@@ -3,7 +3,7 @@ import os
 
 from app.common.qfluentwidgets import (SettingCardGroup, SwitchSettingCard, ComboBoxSettingCard,
                                        PushSettingCard, ExpandLayout, InfoBar,
-                                       setTheme, setThemeColor, RangeSettingCard,
+                                       setTheme, setThemeColor,
                                        TeachingTip, TeachingTipTailPosition, TeachingTipView, PushButton)
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QLabel, QFileDialog
@@ -238,22 +238,6 @@ class SettingInterface(SeraphineInterface):
                    self.tr('Use system setting')],
             parent=self.personalizationGroup)
 
-        # 自定义背景图片
-        self.backgroundImageCard = PushSettingCard(
-            self.tr("选择图片"), Icon.BACKGROUNDCOLOR, self.tr("自定义背景"),
-            self.tr("上传一张图片作为软件背景"),
-            self.personalizationGroup)
-        self.backgroundImageCard.button.setFixedWidth(100)
-        self.backgroundImageCard.button.setStyleSheet(
-            "QPushButton {padding-left: 0; padding-right: 0;}")
-
-        self.backgroundOpacityCard = RangeSettingCard(
-            cfg.backgroundOpacity,
-            Icon.BLUR,
-            self.tr("背景透明度"),
-            self.tr("数值越小背景越透明，内容越清晰"),
-            self.personalizationGroup)
-
         self.__initWidget()
 
     def __initWidget(self):
@@ -304,8 +288,6 @@ class SettingInterface(SeraphineInterface):
         self.personalizationGroup.addSettingCard(self.micaCard)
         self.personalizationGroup.addSettingCard(self.themeCard)
         self.personalizationGroup.addSettingCard(self.themeColorCard)
-        self.personalizationGroup.addSettingCard(self.backgroundImageCard)
-        self.personalizationGroup.addSettingCard(self.backgroundOpacityCard)
         self.personalizationGroup.addSettingCard(self.gameTabColorSettingCard)
         self.personalizationGroup.addSettingCard(
             self.deathNumberColorSettingCard)
@@ -336,22 +318,6 @@ class SettingInterface(SeraphineInterface):
         )
         self.checkUpdateCard.clicked.connect(
             lambda: signalBus.checkUpdateRequested.emit())
-        self.backgroundImageCard.clicked.connect(self.__onBackgroundImageCardClicked)
-
-    def __onBackgroundImageCardClicked(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, self.tr("选择背景图片"), "",
-            self.tr("图片文件 (*.png *.jpg *.jpeg *.bmp *.webp)"))
-        if not path:
-            return
-
-        cfg.set(cfg.backgroundImagePath, path)
-        signalBus.backgroundImageChanged.emit(path)
-        InfoBar.success(
-            self.tr("设置成功"),
-            self.tr("背景图片已更新"),
-            duration=2000,
-            parent=self)
 
     def __onLolFolderCardClicked(self):
         current = cfg.get(cfg.lolFolder)

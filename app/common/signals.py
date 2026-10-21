@@ -39,8 +39,5 @@ class SignalBus(QObject):
     # 更新检查
     checkUpdateRequested = pyqtSignal()
 
-    # 自定义背景
-    backgroundImageChanged = pyqtSignal(str)
-
 
 signalBus = SignalBus()

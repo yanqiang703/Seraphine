@@ -71,13 +71,6 @@ class Config(QConfig):
 
     micaEnabled = ConfigItem(
         "Personalization", "MicaEnabled", isWin11(), BoolValidator())
-
-    # 自定义背景图片路径与透明度（0-100）
-    backgroundImagePath = ConfigItem(
-        "Personalization", "BackgroundImagePath", "")
-    backgroundOpacity = RangeConfigItem(
-        "Personalization", "BackgroundOpacity", 70, RangeValidator(0, 100))
-
     dpiScale = OptionsConfigItem("Personalization",
                                  "DpiScale",
                                  "Auto",

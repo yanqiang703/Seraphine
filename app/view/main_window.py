@@ -12,7 +12,7 @@ import asyncio
 from aiohttp.client_exceptions import ClientConnectorError
 from qasync import asyncClose, asyncSlot
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QEvent, QTimer, QPoint
-from PyQt5.QtGui import QIcon, QImage, QPixmap, QPainter, QColor
+from PyQt5.QtGui import QIcon, QImage
 from PyQt5.QtWidgets import QApplication, QSystemTrayIcon
 
 from app.common.qfluentwidgets import (NavigationItemPosition, InfoBar, InfoBarPosition, Action,
@@ -100,9 +100,6 @@ class MainWindow(FluentWindow):
 
         self.lastTipsTime = time.time()
         self.lastTipsType = None
-
-        # 自定义背景
-        self._backgroundPixmap = None
 
         self.__initInterface()
         self.__initNavigation()
@@ -281,41 +278,6 @@ class MainWindow(FluentWindow):
             self.__onCurrentStackedChanged)
         self.mainWindowHide.connect(self.__onWindowHide)
 
-        # 自定义背景
-        signalBus.backgroundImageChanged.connect(self.__onBackgroundImageChanged)
-        cfg.backgroundOpacity.valueChanged.connect(self.__onBackgroundOpacityChanged)
-
-    def __onBackgroundImageChanged(self, path):
-        self.__loadBackgroundImage()
-        self.update()
-
-    def __onBackgroundOpacityChanged(self, value):
-        self.update()
-
-    def __loadBackgroundImage(self):
-        path = cfg.get(cfg.backgroundImagePath)
-        if path and Path(path).exists():
-            self._backgroundPixmap = QPixmap(path)
-        else:
-            self._backgroundPixmap = None
-        self.update()
-
-    def paintEvent(self, event):
-        if self._backgroundPixmap and not self._backgroundPixmap.isNull():
-            painter = QPainter(self)
-            painter.setRenderHint(QPainter.SmoothPixmapTransform)
-            # 按窗口比例缩放并居中绘制
-            scaled = self._backgroundPixmap.scaled(
-                self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-            x = (self.width() - scaled.width()) // 2
-            y = (self.height() - scaled.height()) // 2
-            painter.drawPixmap(x, y, scaled)
-            # 叠一层半透明黑色遮罩，保证文字可读
-            opacity = cfg.get(cfg.backgroundOpacity) / 100.0
-            painter.fillRect(self.rect(), QColor(0, 0, 0, int(255 * opacity)))
-            painter.end()
-        return super().paintEvent(event)
-
     def __initWindow(self):
         desktop = QApplication.desktop().availableGeometry()
         w, h = desktop.width(), desktop.height()
@@ -338,7 +300,6 @@ class MainWindow(FluentWindow):
         self.titleBar.hBoxLayout.insertSpacing(0, 10)
 
         self.setMicaEffectEnabled(cfg.get(cfg.micaEnabled))
-        self.__loadBackgroundImage()
 
         self.splashScreen = SplashScreen(self.windowIcon(), self)
         self.splashScreen.setIconSize(QSize(106, 106))
