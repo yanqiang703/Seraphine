@@ -211,7 +211,7 @@ class Config(QConfig):
         "General", "MiniWindowOnTop", True, BoolValidator())
 
     enableTimerWindow = ConfigItem(
-        "General", "EnableTimerWindow", True, BoolValidator())
+        "General", "EnableTimerWindow", False, BoolValidator())
     timerWindowOnTop = ConfigItem(
         "General", "TimerWindowOnTop", True, BoolValidator())
 

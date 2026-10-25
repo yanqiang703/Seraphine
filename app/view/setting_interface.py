@@ -118,6 +118,13 @@ class SettingInterface(SeraphineInterface):
             configItem=cfg.enableMiniWindow,
             parent=self.generalGroup)
 
+        self.timerWindowCard = SwitchSettingCard(
+            Icon.WINDOW,
+            "对局计时悬浮窗",
+            "对局进行中显示敌方大招与召唤师技能冷却倒计时（默认关闭）",
+            configItem=cfg.enableTimerWindow,
+            parent=self.generalGroup)
+
         self.logGroup = SettingCardGroup(self.tr("Log"), self.scrollWidget)
 
         self.logLevelCard = ComboBoxSettingCard(
@@ -280,6 +287,7 @@ class SettingInterface(SeraphineInterface):
         self.generalGroup.addSettingCard(self.enableCloseToTray)
         self.generalGroup.addSettingCard(self.silentCard)
         self.generalGroup.addSettingCard(self.miniWindowCard)
+        self.generalGroup.addSettingCard(self.timerWindowCard)
         self.generalGroup.addSettingCard(self.checkUpdateCard)
 
         self.logGroup.addSettingCard(self.logLevelCard)
