@@ -293,7 +293,7 @@ class MainWindow(FluentWindow):
         self.resize(self.windowSize)
 
         self.setWindowIcon(QIcon("app/resource/images/logo.png"))
-        self.setWindowTitle("Seraphine")
+        self.setWindowTitle(f"Seraphine v{VERSION}")
 
         self.titleBar.titleLabel.setStyleSheet(
             "QLabel {font: 13px 'Segoe UI', 'Microsoft YaHei';}")
@@ -565,7 +565,7 @@ class MainWindow(FluentWindow):
         self.careerInterface.setLoadingPageEnabled(True)
         self.opggWindow.setHomeInterfaceEnabled(True)
 
-        self.setWindowTitle("Seraphine")
+        self.setWindowTitle(f"Seraphine v{VERSION}")
 
         self.checkAndSwitchTo(self.startInterface)
         self.__lockInterface()
@@ -899,7 +899,7 @@ class MainWindow(FluentWindow):
             self.opggWindow.setStaysOnTopEnabled(False)
 
         if title != None:
-            self.setWindowTitle("Seraphine - " + title)
+            self.setWindowTitle(f"Seraphine v{VERSION} - " + title)
 
     async def __onMatchMade(self):
         if not cfg.get(cfg.enableAutoAcceptMatching):
