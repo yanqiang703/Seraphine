@@ -294,6 +294,7 @@ class TimerWindow(FramelessWindow):
         self.titleBar.helpButton.clicked.connect(self.__showHelp)
         signalBus.gameStatusChanged.connect(self.__onGameStatusChanged)
         signalBus.lolClientEnded.connect(self.__onLolClientEnded)
+        cfg.enableTimerWindow.valueChanged.connect(self.__onEnableChanged)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -312,6 +313,9 @@ class TimerWindow(FramelessWindow):
     async def __onGameStatusChanged(self, phase):
         if phase in INGAME_PHASES:
             if not cfg.get(cfg.enableTimerWindow):
+                # 开关关闭时：停止轮询并确保窗口隐藏
+                self.pollTimer.stop()
+                self.hide()
                 return
             if not self.isVisible():
                 self.show()
@@ -321,6 +325,12 @@ class TimerWindow(FramelessWindow):
                 asyncio.create_task(self.__tryBuild())
         else:
             self.pollTimer.stop()
+
+    def __onEnableChanged(self, enabled):
+        # 设置里关闭开关时立即收起窗口（含对局进行中）
+        if not enabled:
+            self.pollTimer.stop()
+            self.hide()
 
     @asyncSlot()
     async def __onLolClientEnded(self):
